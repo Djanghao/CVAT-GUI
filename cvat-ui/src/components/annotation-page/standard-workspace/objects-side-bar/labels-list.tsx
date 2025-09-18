@@ -8,8 +8,9 @@ import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 import message from 'antd/lib/message';
 
 import { LabelType, ObjectType, ShapeType } from 'cvat-core-wrapper';
+import { RectDrawingMethod } from 'cvat-canvas-wrapper';
 import { CombinedState } from 'reducers';
-import { rememberObject, updateAnnotationsAsync } from 'actions/annotation-actions';
+import { rememberObject, repeatDrawShapeAsync, updateAnnotationsAsync } from 'actions/annotation-actions';
 import LabelItemContainer from 'containers/annotation-page/standard-workspace/objects-side-bar/label-item';
 import GlobalHotKeys, { KeyMapItem } from 'utils/mousetrap-react';
 import Text from 'antd/lib/typography/Text';
@@ -18,6 +19,7 @@ import { registerComponentShortcuts } from 'actions/shortcuts-actions';
 import { subKeyMap } from 'utils/component-subkeymap';
 import { useResetShortcutsOnUnmount } from 'utils/hooks';
 import { getCVATStore } from 'cvat-store';
+import { ShortcutsFeatureToggleID } from 'utils/shortcuts-feature-toggles';
 
 const componentShortcuts: Record<string, KeyMapItem> = {};
 
@@ -38,9 +40,10 @@ registerComponentShortcuts(componentShortcuts);
 function LabelsListComponent(): JSX.Element {
     const dispatch = useDispatch();
 
-    const { labels, keyMap } = useSelector((state: CombinedState) => ({
+    const { labels, keyMap, featureToggles } = useSelector((state: CombinedState) => ({
         labels: state.annotation.job.labels,
         keyMap: state.shortcuts.keyMap,
+        featureToggles: state.shortcuts.featureToggles,
     }), shallowEqual);
 
     const labelIDs = labels.map((label: any): number => label.id);
@@ -109,6 +112,18 @@ function LabelsListComponent(): JSX.Element {
 
                 message.destroy();
                 message.success(`Default label has been changed to "${label.name}"`);
+
+                const autoRectangleEnabled = featureToggles[ShortcutsFeatureToggleID.AUTO_RECTANGLE_ON_LABEL_SWITCH];
+
+                if (autoRectangleEnabled && label.type !== LabelType.TAG) {
+                    dispatch(rememberObject({
+                        activeLabelID: labelID,
+                        activeObjectType: ObjectType.SHAPE,
+                        activeShapeType: ShapeType.RECTANGLE,
+                        activeRectDrawingMethod: RectDrawingMethod.CLASSIC,
+                    }, true));
+                    dispatch(repeatDrawShapeAsync());
+                }
             }
         }
     };

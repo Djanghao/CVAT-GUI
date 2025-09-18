@@ -10,6 +10,7 @@ import {
     Collapse,
     List,
     Alert,
+    Switch,
 } from 'antd/lib';
 import Search from 'antd/lib/input/Search';
 import Empty from 'antd/lib/empty';
@@ -24,6 +25,7 @@ import { shortcutsActions } from 'actions/shortcuts-actions';
 import { useDispatch, useSelector } from 'react-redux';
 import { CombinedState } from 'reducers';
 import MultipleShortcutsDisplay from './multiple-shortcuts-display';
+import { SHORTCUTS_FEATURE_TOGGLES, SHORTCUTS_DEFAULT_FEATURE_TOGGLE_STATE } from 'utils/shortcuts-feature-toggles';
 
 interface Props {
     keyMap: KeyMap;
@@ -50,6 +52,8 @@ function ShortcutsSettingsComponent(props: Props): JSX.Element {
             onOk: () => {
                 const currentSettings = localStorage.getItem('clientSettings');
                 dispatch(shortcutsActions.registerShortcuts({ ...shortcuts.defaultState }));
+                // Also reset feature toggles to defaults immediately (no refresh needed)
+                dispatch(shortcutsActions.setFeatureToggles(SHORTCUTS_DEFAULT_FEATURE_TOGGLE_STATE));
                 if (currentSettings) {
                     try {
                         const parsedSettings = JSON.parse(currentSettings);
@@ -71,7 +75,51 @@ function ShortcutsSettingsComponent(props: Props): JSX.Element {
     ), [keyMap, searchValue]);
 
     const items: any = useMemo(() => {
-        const scopeItems = Object.values(ShortcutScope).map((scope: string) => {
+        const normalizedSearch = searchValue.trim().toLowerCase();
+
+        const featureSections = SHORTCUTS_FEATURE_TOGGLES.filter((toggle) => (
+            !normalizedSearch ||
+            toggle.title.toLowerCase().includes(normalizedSearch) ||
+            toggle.description.toLowerCase().includes(normalizedSearch)
+        ));
+
+        const sections: any[] = [];
+
+        if (featureSections.length) {
+            sections.push({
+                label: <span className='cvat-shortcuts-settings-label cvat-shortcuts-settings-cvat-gui-label'>CVAT-GUI++ Features</span>,
+                key: ShortcutScope.CVAT_GUI,
+                showArrow: true,
+                className: 'cvat-shortcuts-settings-cvat-gui',
+                children: (
+                    <List
+                        dataSource={featureSections}
+                        renderItem={(item) => (
+                            <List.Item
+                                key={item.id}
+                                className='cvat-shortcuts-settings-collapse-item'
+                            >
+                                <List.Item.Meta
+                                    title={<p className='cvat-shortcuts-settings-item-title'>{item.title}</p>}
+                                    description={<span className='cvat-shortcuts-settings-item-description'>{item.description}</span>}
+                                />
+                                <Switch
+                                    checked={shortcuts.featureToggles[item.id]}
+                                    onChange={(checked) => dispatch(
+                                        shortcutsActions.setFeatureToggle(item.id, checked),
+                                    )}
+                                />
+                            </List.Item>
+                        )}
+                        style={{ paddingLeft: 5 }}
+                    />
+                ),
+            });
+        }
+
+        const scopeItems = Object.values(ShortcutScope)
+            .filter((scope: string) => scope !== ShortcutScope.CVAT_GUI)
+            .map((scope: string) => {
             const viewFilteredItems = filteredKeyMap.filter(
                 ([, item]) => item.scope === scope,
             ).sort(([, item1], [, item2]) => (item1.displayWeight ?? 0) - (item2.displayWeight ?? 0));
@@ -116,12 +164,14 @@ function ShortcutsSettingsComponent(props: Props): JSX.Element {
             };
         }).filter(Boolean);
 
-        if (scopeItems.length === 0) {
+        const filteredScopeItems = scopeItems.filter(Boolean);
+
+        if (!sections.length && filteredScopeItems.length === 0) {
             return null;
         }
 
-        return scopeItems;
-    }, [filteredKeyMap]);
+        return [...sections, ...filteredScopeItems];
+    }, [dispatch, filteredKeyMap, searchValue, shortcuts.featureToggles]);
 
     const handleCollapseChange = (keys: string[] | string): void => {
         if (!searchValue) {

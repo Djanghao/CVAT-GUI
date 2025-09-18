@@ -24,6 +24,7 @@ export enum StorageStatuses {
 
 // if this enum is changed, kindly update the conflictDetector and it's helpers as well
 export enum ShortcutScope {
+    CVAT_GUI = 'CVAT_GUI',
     GENERAL = 'GENERAL',
     ANNOTATION_PAGE = 'ANNOTATION_PAGE',
     OBJECTS_SIDEBAR = 'OBJECTS_SIDEBAR',

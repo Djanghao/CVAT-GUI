@@ -488,6 +488,10 @@ export function restoreSettingsAsync(): ThunkAction {
             const resolvedKeyMap = resolveConflicts(updateKeyMap, shortcuts.keyMap);
 
             dispatch(shortcutsActions.registerShortcuts(resolvedKeyMap));
+
+            if (loadedSettings.shortcuts.featureToggles) {
+                dispatch(shortcutsActions.setFeatureToggles(loadedSettings.shortcuts.featureToggles));
+            }
         }
     };
 }
@@ -505,6 +509,7 @@ export function updateCachedSettings(settings: CombinedState['settings'], shortc
                     }
                     return acc;
                 }, {}),
+            featureToggles: { ...shortcuts.featureToggles },
         },
         imageFilters: settings.imageFilters.filter((imageFilter) => supportedImageFilters.includes(imageFilter.alias))
             .map((imageFilter) => imageFilter.modifier.toJSON()),

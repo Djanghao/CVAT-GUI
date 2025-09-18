@@ -7,6 +7,7 @@ import { AuthActions, AuthActionTypes } from 'actions/auth-actions';
 import { ShortcutsActions, ShortcutsActionsTypes } from 'actions/shortcuts-actions';
 import { KeyMap, KeyMapItem } from 'utils/mousetrap-react';
 import { conflictDetector } from 'utils/conflict-detector';
+import { ShortcutsFeatureToggleID, SHORTCUTS_DEFAULT_FEATURE_TOGGLE_STATE, normalizeFeatureToggles } from 'utils/shortcuts-feature-toggles';
 import { ShortcutsState } from '.';
 
 const capitalize = (text: string): string => text.slice(0, 1).toUpperCase() + text.slice(1);
@@ -60,6 +61,7 @@ const defaultState: ShortcutsState = {
         return acc;
     }, {}),
     defaultState: { ...defaultKeyMap },
+    featureToggles: { ...SHORTCUTS_DEFAULT_FEATURE_TOGGLE_STATE },
 };
 
 export default (state = defaultState, action: ShortcutsActions | BoundariesActions | AuthActions): ShortcutsState => {
@@ -111,6 +113,31 @@ export default (state = defaultState, action: ShortcutsActions | BoundariesActio
             return {
                 ...state,
                 defaultState: { ...shortcuts },
+            };
+        }
+        case ShortcutsActionsTypes.SET_FEATURE_TOGGLE: {
+            const { featureID, enabled } = action.payload as {
+                featureID: ShortcutsFeatureToggleID;
+                enabled: boolean;
+            };
+            return {
+                ...state,
+                featureToggles: normalizeFeatureToggles({
+                    ...state.featureToggles,
+                    [featureID]: enabled,
+                }),
+            };
+        }
+        case ShortcutsActionsTypes.SET_FEATURE_TOGGLES: {
+            const { featureToggles } = action.payload as {
+                featureToggles: Partial<Record<ShortcutsFeatureToggleID, boolean>>;
+            };
+            return {
+                ...state,
+                featureToggles: normalizeFeatureToggles({
+                    ...state.featureToggles,
+                    ...featureToggles,
+                }),
             };
         }
         case BoundariesActionTypes.RESET_AFTER_ERROR:

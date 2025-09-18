@@ -5,6 +5,7 @@
 
 import { getCVATStore } from 'cvat-store';
 import { KeyMapItem } from 'utils/mousetrap-react';
+import { ShortcutsFeatureToggleID } from 'utils/shortcuts-feature-toggles';
 import { ActionUnion, createAction } from 'utils/redux';
 
 export enum ShortcutsActionsTypes {
@@ -13,6 +14,8 @@ export enum ShortcutsActionsTypes {
     REGISTER_SHORTCUTS = 'REGISTER_SHORTCUTS',
     SET_SHORTCUTS = 'SET_SHORTCUTS',
     SET_DEFAULT_SHORTCUTS = 'SET_DEFAULT_SHORTCUTS',
+    SET_FEATURE_TOGGLE = 'SET_FEATURE_TOGGLE',
+    SET_FEATURE_TOGGLES = 'SET_FEATURE_TOGGLES',
 }
 
 export const shortcutsActions = {
@@ -27,6 +30,12 @@ export const shortcutsActions = {
     ),
     setDefaultShortcuts: (shortcuts: Record<string, KeyMapItem>) => (
         createAction(ShortcutsActionsTypes.SET_DEFAULT_SHORTCUTS, { shortcuts })
+    ),
+    setFeatureToggle: (featureID: ShortcutsFeatureToggleID, enabled: boolean) => (
+        createAction(ShortcutsActionsTypes.SET_FEATURE_TOGGLE, { featureID, enabled })
+    ),
+    setFeatureToggles: (featureToggles: Partial<Record<ShortcutsFeatureToggleID, boolean>>) => (
+        createAction(ShortcutsActionsTypes.SET_FEATURE_TOGGLES, { featureToggles })
     ),
 };
 
