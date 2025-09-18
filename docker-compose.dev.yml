@@ -114,7 +114,7 @@ services:
 
   cvat_redis_ondisk:
     ports:
-      - '127.0.0.1:6666:6666'
+      - '127.0.0.1:16666:6666'
 
   cvat_vector:
     ports:
