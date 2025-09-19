@@ -90,6 +90,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
     private draggableShape: SVG.Shape | null;
     private resizableShape: SVG.Shape | null;
     private ctrlPressed: boolean;
+    private alignmentGuideId: string | null;
     private innerObjectsFlags: {
         drawHidden: Record<number, boolean>;
         editHidden: Record<number, boolean>;
@@ -1160,12 +1161,138 @@ export class CanvasViewImpl implements CanvasView, Listener {
             });
 
             let startCenter = null;
+            const removeAlignmentGuides = (): void => {
+                if (this.alignmentGuideId) {
+                    const guides = Array.from(
+                        this.content.getElementsByClassName('cvat_canvas_alignment_guide'),
+                    ) as SVGLineElement[];
+                    for (const el of guides) {
+                        if (el.getAttribute('data-align-id') === this.alignmentGuideId) {
+                            el.parentNode?.removeChild(el);
+                        }
+                    }
+                }
+            };
+
+            const updateAlignmentGuides = (): void => {
+                if (!state || state.shapeType !== 'rectangle') return;
+                const scale = this.geometry.scale;
+                const threshold = 2 / scale;
+                const dashLen = Math.max(8 / scale, 6 / scale);
+                const dashArray = `${dashLen} ${dashLen}`;
+                const dashedStrokeWidth = consts.BASE_STROKE_WIDTH / (1 * scale);
+                const haloWidth = Math.max(dashedStrokeWidth * 1.8, 3 / scale);
+
+                const bbox = shape.bbox();
+                const top = bbox.y;
+                const bottom = bbox.y + bbox.height;
+                const left = bbox.x;
+                const right = bbox.x + bbox.width;
+
+                const xGuides: number[] = [];
+                const yGuides: number[] = [];
+                const addUnique = (arr: number[], val: number): void => {
+                    if (!arr.some((v) => Math.abs(v - val) <= threshold)) arr.push(val);
+                };
+
+                const curId = shape.id();
+                const allRects = Array.from(this.content.getElementsByClassName('cvat_canvas_shape'))
+                    .filter((el: Element) => el.tagName && el.tagName.toLowerCase() === 'rect') as SVGRectElement[];
+
+                for (const el of allRects) {
+                    if ((el as SVGElement).id === curId) continue;
+                    if ((el as SVGElement).classList.contains('cvat_canvas_hidden')) continue;
+                    const bb = el.getBBox();
+                    const oLeft = bb.x;
+                    const oRight = bb.x + bb.width;
+                    const oTop = bb.y;
+                    const oBottom = bb.y + bb.height;
+
+                    if (Math.abs(top - oTop) <= threshold || Math.abs(top - oBottom) <= threshold) addUnique(yGuides, top);
+                    if (Math.abs(bottom - oTop) <= threshold || Math.abs(bottom - oBottom) <= threshold) addUnique(yGuides, bottom);
+                    if (Math.abs(left - oLeft) <= threshold || Math.abs(left - oRight) <= threshold) addUnique(xGuides, left);
+                    if (Math.abs(right - oLeft) <= threshold || Math.abs(right - oRight) <= threshold) addUnique(xGuides, right);
+                }
+
+                // clear previous
+                removeAlignmentGuides();
+
+                // draw new
+                const width = (this.content as any).clientWidth as number;
+                const height = (this.content as any).clientHeight as number;
+                const alignId = this.alignmentGuideId as string;
+
+                const drawH = (y: number): void => {
+                    // halo
+                    this.adoptedContent
+                        .line(0, y, width, y)
+                        .attr({
+                            'stroke-width': haloWidth,
+                            'stroke-linecap': 'round',
+                            'stroke-dasharray': dashArray,
+                            'stroke-opacity': 0.6,
+                            'shape-rendering': 'geometricprecision',
+                            'pointer-events': 'none',
+                            'data-align-id': alignId,
+                        })
+                        .style({ stroke: '#000' })
+                        .addClass('cvat_canvas_alignment_guide');
+                    // main
+                    this.adoptedContent
+                        .line(0, y, width, y)
+                        .attr({
+                            'stroke-width': dashedStrokeWidth,
+                            'stroke-linecap': 'round',
+                            'stroke-dasharray': dashArray,
+                            'shape-rendering': 'geometricprecision',
+                            'pointer-events': 'none',
+                            'data-align-id': alignId,
+                        })
+                        .style({ stroke: '#FFEB3B' })
+                        .addClass('cvat_canvas_alignment_guide');
+                };
+
+                const drawV = (x: number): void => {
+                    // halo
+                    this.adoptedContent
+                        .line(x, 0, x, height)
+                        .attr({
+                            'stroke-width': haloWidth,
+                            'stroke-linecap': 'round',
+                            'stroke-dasharray': dashArray,
+                            'stroke-opacity': 0.6,
+                            'shape-rendering': 'geometricprecision',
+                            'pointer-events': 'none',
+                            'data-align-id': alignId,
+                        })
+                        .style({ stroke: '#000' })
+                        .addClass('cvat_canvas_alignment_guide');
+                    // main
+                    this.adoptedContent
+                        .line(x, 0, x, height)
+                        .attr({
+                            'stroke-width': dashedStrokeWidth,
+                            'stroke-linecap': 'round',
+                            'stroke-dasharray': dashArray,
+                            'shape-rendering': 'geometricprecision',
+                            'pointer-events': 'none',
+                            'data-align-id': alignId,
+                        })
+                        .style({ stroke: '#FFEB3B' })
+                        .addClass('cvat_canvas_alignment_guide');
+                };
+
+                for (const y of yGuides) drawH(y);
+                for (const x of xGuides) drawV(x);
+            };
+
             draggableInstance.on('dragstart', (): void => {
                 onDragStart();
                 this.draggableShape = shape;
                 const { cx, cy } = shape.bbox();
                 startCenter = { x: cx, y: cy };
                 start = Date.now();
+                this.alignmentGuideId = `align_${Date.now()}_${Math.random().toString(36).slice(2)}`;
             }).on('dragmove', (e: CustomEvent): void => {
                 onDragMove();
                 if (state.shapeType === 'skeleton' && e.target) {
@@ -1192,6 +1319,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
                     skeletonSVGTemplate = skeletonSVGTemplate ?? makeSVGFromTemplate(state.label.structure.svg);
                     setupSkeletonEdges(shape as SVG.G, skeletonSVGTemplate);
                 }
+                updateAlignmentGuides();
             }).on('dragend', (): void => {
                 if (aborted) {
                     this.resetViewPosition(state.clientID);
@@ -1200,6 +1328,8 @@ export class CanvasViewImpl implements CanvasView, Listener {
 
                 onDragEnd();
                 this.draggableShape = null;
+                removeAlignmentGuides();
+                this.alignmentGuideId = null;
                 const { cx, cy } = shape.bbox();
 
                 const dx2 = (startCenter.x - cx) ** 2;
@@ -1252,6 +1382,8 @@ export class CanvasViewImpl implements CanvasView, Listener {
                 onDragEnd();
                 this.draggableShape = null;
                 aborted = true;
+                removeAlignmentGuides();
+                this.alignmentGuideId = null;
                 // disable internal drag events of SVG.js
                 // call chain is (mouseup -> SVG.handler.end -> SVG.handler.drag -> dragend)
                 window.dispatchEvent(new MouseEvent('mouseup'));
@@ -1547,6 +1679,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
         this.isImageLoading = true;
         this.draggableShape = null;
         this.resizableShape = null;
+        this.alignmentGuideId = null;
 
         // Create HTML elements
         this.text = window.document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -2674,6 +2807,8 @@ export class CanvasViewImpl implements CanvasView, Listener {
 
         const crosshair = Array.from(this.content.getElementsByClassName('cvat_canvas_crosshair'));
         crosshair.forEach((line: SVGLineElement): void => this.content.append(line));
+        const alignGuides = Array.from(this.content.getElementsByClassName('cvat_canvas_alignment_guide'));
+        alignGuides.forEach((line: SVGLineElement): void => this.content.append(line));
         const interaction = Array.from(this.content.getElementsByClassName('cvat_interaction_point'));
         interaction.forEach((circle: SVGCircleElement): void => this.content.append(circle));
 
