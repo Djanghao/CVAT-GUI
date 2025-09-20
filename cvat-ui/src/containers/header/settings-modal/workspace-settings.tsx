@@ -16,15 +16,10 @@ import {
     changeDefaultApproxPolyAccuracy,
     switchTextFontSize,
     switchControlPointsSize,
-    changeSnapTolerance,
     switchTextPosition,
     switchTextContent,
     switchShowingTagsOnFrame,
     switchAdaptiveZoom,
-    switchCrosshairAlignmentHighlight,
-    switchRectangleAlignmentGuides,
-    switchRectangleDrawingSnap,
-    switchRectangleMovingSnap,
 } from 'actions/settings-actions';
 
 import { CombinedState } from 'reducers';
@@ -43,14 +38,9 @@ interface StateToProps {
     intelligentPolygonCrop: boolean;
     textFontSize: number;
     controlPointsSize: number;
-    snapTolerance: number;
     textPosition: 'auto' | 'center';
     textContent: string;
     showTagsOnFrame: boolean;
-    highlightCrosshairOverlaps: boolean;
-    showRectangleAlignmentGuides: boolean;
-    enableRectangleDrawingSnap: boolean;
-    enableRectangleMovingSnap: boolean;
 }
 
 interface DispatchToProps {
@@ -65,14 +55,9 @@ interface DispatchToProps {
     onChangeDefaultApproxPolyAccuracy(approxPolyAccuracy: number): void;
     onChangeTextFontSize(fontSize: number): void;
     onChangeControlPointsSize(pointsSize: number): void;
-    onChangeSnapTolerance(pixels: number): void;
     onChangeTextPosition(position: 'auto' | 'center'): void;
     onChangeTextContent(textContent: string[]): void;
     onSwitchShowingTagsOnFrame(enabled: boolean): void;
-    onSwitchCrosshairAlignmentHighlight(enabled: boolean): void;
-    onSwitchRectangleAlignmentGuides(enabled: boolean): void;
-    onSwitchRectangleDrawingSnap(enabled: boolean): void;
-    onSwitchRectangleMovingSnap(enabled: boolean): void;
 }
 
 function mapStateToProps(state: CombinedState): StateToProps {
@@ -89,14 +74,9 @@ function mapStateToProps(state: CombinedState): StateToProps {
         defaultApproxPolyAccuracy,
         textFontSize,
         controlPointsSize,
-        snapTolerance,
         textPosition,
         textContent,
         showTagsOnFrame,
-        highlightCrosshairOverlaps,
-        showRectangleAlignmentGuides,
-        enableRectangleDrawingSnap,
-        enableRectangleMovingSnap,
     } = workspace;
 
     return {
@@ -111,14 +91,9 @@ function mapStateToProps(state: CombinedState): StateToProps {
         defaultApproxPolyAccuracy,
         textFontSize,
         controlPointsSize,
-        snapTolerance,
         textPosition,
         textContent,
         showTagsOnFrame,
-        highlightCrosshairOverlaps,
-        showRectangleAlignmentGuides,
-        enableRectangleDrawingSnap,
-        enableRectangleMovingSnap,
     };
 }
 
@@ -134,14 +109,9 @@ const mapDispatchToProps: DispatchToProps = {
     onChangeDefaultApproxPolyAccuracy: changeDefaultApproxPolyAccuracy,
     onChangeTextFontSize: switchTextFontSize,
     onChangeControlPointsSize: switchControlPointsSize,
-    onChangeSnapTolerance: changeSnapTolerance,
     onChangeTextPosition: switchTextPosition,
     onChangeTextContent: switchTextContent,
     onSwitchShowingTagsOnFrame: switchShowingTagsOnFrame,
-    onSwitchCrosshairAlignmentHighlight: switchCrosshairAlignmentHighlight,
-    onSwitchRectangleAlignmentGuides: switchRectangleAlignmentGuides,
-    onSwitchRectangleDrawingSnap: switchRectangleDrawingSnap,
-    onSwitchRectangleMovingSnap: switchRectangleMovingSnap,
 };
 
 function WorkspaceSettingsContainer(props: StateToProps & DispatchToProps): JSX.Element {

@@ -11,12 +11,13 @@ import Text from 'antd/lib/typography/Text';
 import Modal from 'antd/lib/modal/Modal';
 import Button from 'antd/lib/button';
 import notification from 'antd/lib/notification';
-import { PlayCircleOutlined, LaptopOutlined, BuildOutlined } from '@ant-design/icons';
+import { PlayCircleOutlined, LaptopOutlined, BuildOutlined, PlusSquareOutlined } from '@ant-design/icons';
 
 import { restoreSettingsAsync, updateCachedSettings } from 'actions/settings-actions';
 import WorkspaceSettingsContainer from 'containers/header/settings-modal/workspace-settings';
 import PlayerSettingsContainer from 'containers/header/settings-modal/player-settings';
 import ShortcutsSettingsContainer from 'containers/header/settings-modal/shortcuts-settings';
+import CvatGuiPlusSettingsContainer from 'containers/header/settings-modal/cvat-gui-plus-settings';
 import { CombinedState } from 'reducers';
 
 interface SettingsModalProps {
@@ -71,6 +72,12 @@ function SettingsModal(props: SettingsModalProps): JSX.Element {
             label: <Text>Shortcuts</Text>,
             icon: <BuildOutlined />,
             children: <ShortcutsSettingsContainer />,
+        },
+        {
+            key: 'cvat-gui-plus',
+            label: <Text strong className='cvat-settings-gui-plus-tab-label'>CVAT-GUI++ Features</Text>,
+            icon: <PlusSquareOutlined />,
+            children: <CvatGuiPlusSettingsContainer />,
         },
     ];
 
