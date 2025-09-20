@@ -7,7 +7,7 @@ import * as SVG from 'svg.js';
 import consts from './consts';
 import Crosshair from './crosshair';
 import {
-    translateToSVG, PropType, stringifyPoints, translateToCanvas, expandChannels, imageDataToDataURL,
+    translateToSVG, translateFromSVG, PropType, stringifyPoints, translateToCanvas, expandChannels, imageDataToDataURL,
 } from './shared';
 
 import {
@@ -173,7 +173,34 @@ export class InteractionHandlerImpl implements InteractionHandler {
         const eventListener = (e: MouseEvent): void => {
             if (e.button === 0 && !e.altKey) {
                 if (!initialized) {
-                    (this.currentInteractionShape as any).draw(e, { snapToGrid: 0.1 });
+                    // Start from snapped position if snapping is enabled
+                    const shouldSnapStart = this.rectangleSnapEnabled && !e.ctrlKey &&
+                        this.interactionData?.shapeType === 'rectangle';
+                    const startEvent = (() => {
+                        if (!shouldSnapStart) return e;
+                        const [clientX, clientY] = translateFromSVG(
+                            (this.canvas.node as any) as SVGSVGElement,
+                            [this.cursorPosition.x, this.cursorPosition.y],
+                        );
+                        try {
+                            return new MouseEvent('mousedown', {
+                                clientX,
+                                clientY,
+                                button: e.button,
+                                ctrlKey: e.ctrlKey,
+                                altKey: e.altKey,
+                                shiftKey: e.shiftKey,
+                                metaKey: e.metaKey,
+                                bubbles: true,
+                                cancelable: true,
+                                composed: true,
+                            });
+                        } catch (_) {
+                            return e;
+                        }
+                    })();
+
+                    (this.currentInteractionShape as any).draw(startEvent, { snapToGrid: 0.1 });
                     initialized = true;
                 } else {
                     (this.currentInteractionShape as any).draw(e);
@@ -420,6 +447,45 @@ export class InteractionHandlerImpl implements InteractionHandler {
             this.cursorPosition = { x, y };
             if (this.crosshair) {
                 this.crosshair.move(x, y);
+            }
+
+            // While drawing an interaction rectangle, keep the overlay aligned with snapped position
+            const isDrawingRect = this.currentInteractionShape && this.currentInteractionShape.type === 'rect' &&
+                !!this.currentInteractionShape.remember('_paintHandler') && this.interactionData?.shapeType === 'rectangle';
+            if (isDrawingRect && shouldSnap) {
+                const [clientX, clientY] = translateFromSVG(
+                    (this.canvas.node as any) as SVGSVGElement,
+                    [x, y],
+                );
+                let updateEvent: MouseEvent;
+                try {
+                    updateEvent = new MouseEvent('mousemove', {
+                        clientX,
+                        clientY,
+                        button: e.button,
+                        ctrlKey: e.ctrlKey,
+                        altKey: e.altKey,
+                        shiftKey: e.shiftKey,
+                        metaKey: e.metaKey,
+                        bubbles: true,
+                        cancelable: true,
+                        composed: true,
+                    });
+                } catch (_) {
+                    updateEvent = e;
+                }
+
+                const invokeUpdate = () => {
+                    try {
+                        (this.currentInteractionShape as any).draw('update', updateEvent);
+                    } catch (_) { /* ignore */ }
+                };
+
+                try {
+                    window.requestAnimationFrame(invokeUpdate);
+                } catch (_) {
+                    setTimeout(invokeUpdate, 0);
+                }
             }
 
             if (this.interactionData.enableSliding && this.interactionShapes.length) {

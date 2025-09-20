@@ -19,6 +19,7 @@ import {
     readPointsFromShape,
     clamp,
     translateToCanvas,
+    translateFromSVG,
     computeWrappingBox,
     makeSVGFromTemplate,
     setupSkeletonEdges,
@@ -1190,11 +1191,46 @@ export class DrawHandlerImpl implements DrawHandler {
 
         this.canvas.on('mousedown.draw', (e: MouseEvent): void => {
             if (e.button === 0 && !e.altKey) {
+                // If rectangle drawing snap is enabled and Ctrl is not pressed,
+                // start drawing from the snapped crosshair position instead of raw mouse coords.
+                const useSnappedStart = this.drawData?.shapeType === 'rectangle' &&
+                    this.rectangleSnapEnabled && !e.ctrlKey;
+
+                const startEvent = (() => {
+                    if (!useSnappedStart) return e;
+
+                    // Convert snapped canvas/SVG coordinates to client coordinates
+                    const [clientX, clientY] = translateFromSVG(
+                        (this.canvas.node as any) as SVGSVGElement,
+                        [this.cursorPosition.x, this.cursorPosition.y],
+                    );
+
+                    // Synthesize a MouseEvent with snapped client coordinates
+                    try {
+                        return new MouseEvent('mousedown', {
+                            clientX,
+                            clientY,
+                            button: e.button,
+                            ctrlKey: e.ctrlKey,
+                            altKey: e.altKey,
+                            shiftKey: e.shiftKey,
+                            metaKey: e.metaKey,
+                            bubbles: true,
+                            cancelable: true,
+                            composed: true,
+                        });
+                    } catch (_) {
+                        // Fallback for environments where MouseEvent constructor might be restricted
+                        // Use the original event if synthesis fails
+                        return e;
+                    }
+                })();
+
                 if (!initialized) {
-                    this.drawInstance.draw(e, { snapToGrid: 0.1 });
+                    this.drawInstance.draw(startEvent, { snapToGrid: 0.1 });
                     initialized = true;
                 } else {
-                    this.drawInstance.draw(e);
+                    this.drawInstance.draw(startEvent);
                 }
             }
         });
@@ -1353,6 +1389,49 @@ export class DrawHandlerImpl implements DrawHandler {
             this.cursorPosition = { x, y };
             if (this.crosshair) {
                 this.crosshair.move(x, y);
+            }
+
+            // While drawing a rectangle, ensure the in-progress overlay follows the snapped coordinates
+            const isDrawingRect = this.drawData?.shapeType === 'rectangle' && this.drawInstance &&
+                typeof this.drawInstance.remember === 'function' && !!this.drawInstance.remember('_paintHandler');
+            if (isDrawingRect && shouldSnap) {
+                const [clientX, clientY] = translateFromSVG(
+                    (this.canvas.node as any) as SVGSVGElement,
+                    [x, y],
+                );
+
+                let updateEvent: MouseEvent;
+                try {
+                    updateEvent = new MouseEvent('mousemove', {
+                        clientX,
+                        clientY,
+                        button: e.button,
+                        ctrlKey: e.ctrlKey,
+                        altKey: e.altKey,
+                        shiftKey: e.shiftKey,
+                        metaKey: e.metaKey,
+                        bubbles: true,
+                        cancelable: true,
+                        composed: true,
+                    });
+                } catch (_) {
+                    updateEvent = e;
+                }
+
+                // Defer to after the plugin's own update so our snapped update wins
+                const invokeUpdate = () => {
+                    try {
+                        this.drawInstance.draw('update', updateEvent);
+                    } catch (_) {
+                        // ignore
+                    }
+                };
+
+                try {
+                    window.requestAnimationFrame(invokeUpdate);
+                } catch (_) {
+                    setTimeout(invokeUpdate, 0);
+                }
             }
         });
     }
