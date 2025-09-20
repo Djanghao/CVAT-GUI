@@ -15,6 +15,7 @@ export default class Crosshair {
     private lastY: number;
     private lastScale: number;
     private instanceId: string;
+    private highlightEnabled: boolean;
 
     public constructor() {
         this.xGroup = null;
@@ -24,6 +25,7 @@ export default class Crosshair {
         this.lastY = 0;
         this.lastScale = 1;
         this.instanceId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        this.highlightEnabled = true;
     }
 
     private clearGroups(): void {
@@ -39,6 +41,14 @@ export default class Crosshair {
         // Clean up groups if they still exist
         if (this.xGroup) { this.xGroup.remove(); this.xGroup = null; }
         if (this.yGroup) { this.yGroup.remove(); this.yGroup = null; }
+    }
+
+    public setHighlightEnabled(enabled: boolean): void {
+        if (this.highlightEnabled === enabled) return;
+        this.highlightEnabled = enabled;
+        if (this.canvas) {
+            this.buildSegments(this.lastX, this.lastY, this.lastScale);
+        }
     }
 
     private getVisibleRects(): SVG.Rect[] {
@@ -72,7 +82,28 @@ export default class Crosshair {
         const width = (this.canvas.node as any).clientWidth as number;
         const height = (this.canvas.node as any).clientHeight as number;
         const strokeWidth = consts.BASE_STROKE_WIDTH / (2 * scale);
-        const threshold = 2 / scale; // pixel tolerance for alignment
+
+        this.clearGroups();
+        this.xGroup = this.canvas.group();
+        this.yGroup = this.canvas.group();
+
+        if (!this.highlightEnabled) {
+            this.xGroup
+                .line(0, y, width, y)
+                .attr({ 'stroke-width': strokeWidth })
+                .attr({ 'data-crosshair-id': this.instanceId })
+                .addClass('cvat_canvas_crosshair');
+            this.yGroup
+                .line(x, 0, x, height)
+                .attr({ 'stroke-width': strokeWidth })
+                .attr({ 'data-crosshair-id': this.instanceId })
+                .addClass('cvat_canvas_crosshair');
+            return;
+        }
+
+        // Strict overlap visualization: require exact colinearity.
+        // Snapping elsewhere will align coordinates to match exactly.
+        const threshold = 0;
         const dashedStrokeWidth = consts.BASE_STROKE_WIDTH / (1 * scale); // thicker for emphasis
         const haloWidth = Math.max(dashedStrokeWidth * 1.8, 3 / scale);
         const dashLen = Math.max(8 / scale, 6 / scale);
@@ -117,11 +148,6 @@ export default class Crosshair {
             cursor = Math.max(cursor, e);
         }
         if (cursor < height) solidV.push([cursor, height]);
-
-        // Recreate groups
-        this.clearGroups();
-        this.xGroup = this.canvas.group();
-        this.yGroup = this.canvas.group();
 
         // Draw horizontal: y = const
         for (const [s, e] of solidH) {

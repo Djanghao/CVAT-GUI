@@ -979,6 +979,12 @@ export interface WorkspaceSettingsState {
     textPosition: 'auto' | 'center';
     textContent: string;
     showTagsOnFrame: boolean;
+    // Cursor/shape snap tolerance in pixels (screen space)
+    snapTolerance: number;
+    highlightCrosshairOverlaps: boolean;
+    showRectangleAlignmentGuides: boolean;
+    enableRectangleDrawingSnap: boolean;
+    enableRectangleMovingSnap: boolean;
 }
 
 export interface ShapesSettingsState {

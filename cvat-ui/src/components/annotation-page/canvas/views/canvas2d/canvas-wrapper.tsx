@@ -102,9 +102,14 @@ interface StateToProps {
     showObjectsTextAlways: boolean;
     textFontSize: number;
     controlPointsSize: number;
+    snapTolerance: number;
     textPosition: 'auto' | 'center';
     textContent: string;
     showAllInterpolationTracks: boolean;
+    highlightCrosshairOverlaps: boolean;
+    showRectangleAlignmentGuides: boolean;
+    enableRectangleDrawingSnap: boolean;
+    enableRectangleMovingSnap: boolean;
     workspace: Workspace;
     minZLayer: number;
     maxZLayer: number;
@@ -195,8 +200,13 @@ function mapStateToProps(state: CombinedState): StateToProps {
                 intelligentPolygonCrop,
                 textFontSize,
                 controlPointsSize,
+                snapTolerance,
                 textPosition,
                 textContent,
+                highlightCrosshairOverlaps,
+                showRectangleAlignmentGuides,
+                enableRectangleDrawingSnap,
+                enableRectangleMovingSnap,
             },
             shapes: {
                 opacity, colorBy, selectedOpacity, outlined, outlineColor, showBitmap, showProjections, showGroundTruth,
@@ -240,8 +250,13 @@ function mapStateToProps(state: CombinedState): StateToProps {
         showObjectsTextAlways,
         textFontSize,
         controlPointsSize,
+        snapTolerance,
         textPosition,
         textContent,
+        highlightCrosshairOverlaps,
+        showRectangleAlignmentGuides,
+        enableRectangleDrawingSnap,
+        enableRectangleMovingSnap,
         showAllInterpolationTracks,
         showTagsOnFrame,
         curZLayer,
@@ -380,6 +395,7 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
             smoothImage,
             textFontSize,
             controlPointsSize,
+            snapTolerance,
             textPosition,
             textContent,
             colorBy,
@@ -387,6 +403,10 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
             outlineColor,
             showGroundTruth,
             resetZoom,
+            highlightCrosshairOverlaps,
+            showRectangleAlignmentGuides,
+            enableRectangleDrawingSnap,
+            enableRectangleMovingSnap,
         } = this.props;
         const { canvasInstance } = this.props as { canvasInstance: Canvas };
 
@@ -406,6 +426,11 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
             intelligentPolygonCrop,
             selectedShapeOpacity: selectedOpacity,
             controlPointsSize,
+            snapTolerancePx: snapTolerance,
+            highlightCrosshairOverlaps,
+            showRectangleAlignmentGuides,
+            enableRectangleDrawingSnap,
+            enableRectangleMovingSnap,
             shapeOpacity: opacity,
             smoothImage,
             colorBy,
@@ -445,8 +470,13 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
             showObjectsTextAlways,
             textFontSize,
             controlPointsSize,
+            snapTolerance,
             textPosition,
             textContent,
+            highlightCrosshairOverlaps,
+            showRectangleAlignmentGuides,
+            enableRectangleDrawingSnap,
+            enableRectangleMovingSnap,
             showAllInterpolationTracks,
             automaticBordering,
             adaptiveZoom,
@@ -477,7 +507,12 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
             prevProps.outlineColor !== outlineColor ||
             prevProps.outlined !== outlined ||
             prevProps.showGroundTruth !== showGroundTruth ||
-            prevProps.resetZoom !== resetZoom
+            prevProps.resetZoom !== resetZoom ||
+            prevProps.snapTolerance !== snapTolerance ||
+            prevProps.highlightCrosshairOverlaps !== highlightCrosshairOverlaps ||
+            prevProps.showRectangleAlignmentGuides !== showRectangleAlignmentGuides ||
+            prevProps.enableRectangleDrawingSnap !== enableRectangleDrawingSnap ||
+            prevProps.enableRectangleMovingSnap !== enableRectangleMovingSnap
         ) {
             canvasInstance.configure({
                 undefinedAttrValue: config.UNDEFINED_ATTRIBUTE_VALUE,
@@ -493,6 +528,11 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
                 outlinedBorders: outlined ? outlineColor || 'black' : false,
                 textFontSize,
                 controlPointsSize,
+                snapTolerancePx: snapTolerance,
+                highlightCrosshairOverlaps,
+                showRectangleAlignmentGuides,
+                enableRectangleDrawingSnap,
+                enableRectangleMovingSnap,
                 textPosition,
                 textContent,
                 showConflicts: showGroundTruth,

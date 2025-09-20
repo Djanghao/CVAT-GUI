@@ -1176,8 +1176,10 @@ export class CanvasViewImpl implements CanvasView, Listener {
 
             const updateAlignmentGuides = (): void => {
                 if (!state || state.shapeType !== 'rectangle') return;
+                removeAlignmentGuides();
+                if (!(this.configuration.showRectangleAlignmentGuides ?? true)) return;
                 const scale = this.geometry.scale;
-                const threshold = 2 / scale;
+                const threshold = Math.max(0, (this.configuration.snapTolerancePx ?? 2)) / scale;
                 const dashLen = Math.max(8 / scale, 6 / scale);
                 const dashArray = `${dashLen} ${dashLen}`;
                 const dashedStrokeWidth = consts.BASE_STROKE_WIDTH / (1 * scale);
@@ -1213,9 +1215,6 @@ export class CanvasViewImpl implements CanvasView, Listener {
                     if (Math.abs(left - oLeft) <= threshold || Math.abs(left - oRight) <= threshold) addUnique(xGuides, left);
                     if (Math.abs(right - oLeft) <= threshold || Math.abs(right - oRight) <= threshold) addUnique(xGuides, right);
                 }
-
-                // clear previous
-                removeAlignmentGuides();
 
                 // draw new
                 const width = (this.content as any).clientWidth as number;
@@ -1319,6 +1318,91 @@ export class CanvasViewImpl implements CanvasView, Listener {
                     skeletonSVGTemplate = skeletonSVGTemplate ?? makeSVGFromTemplate(state.label.structure.svg);
                     setupSkeletonEdges(shape as SVG.G, skeletonSVGTemplate);
                 }
+
+                // Snap dragging rectangle edges to nearby bbox edges unless Ctrl is pressed
+                if (state.shapeType === 'rectangle' && !this.ctrlPressed &&
+                    (this.configuration.enableRectangleMovingSnap ?? true)) {
+                    const detail = e.detail as any;
+                    const handler = detail?.handler;
+                    const pointer = detail?.p;
+                    const startPoints = handler?.startPoints;
+                    if (handler && pointer && startPoints?.box && startPoints?.point) {
+                        const scale = this.geometry.scale;
+                        const threshold = Math.max(0, (this.configuration.snapTolerancePx ?? 2)) / scale;
+
+                        const { box, point } = startPoints;
+                        // Recreate the position svg.draggable would set before applying snapping adjustments.
+                        const defaultX = box.x + pointer.x - point.x;
+                        const defaultY = box.y + pointer.y - point.y;
+                        const width = box.width;
+                        const height = box.height;
+
+                        const left = defaultX;
+                        const right = defaultX + width;
+                        const top = defaultY;
+                        const bottom = defaultY + height;
+
+                        let targetX = defaultX;
+                        let targetY = defaultY;
+                        let minDX = Number.POSITIVE_INFINITY;
+                        let minDY = Number.POSITIVE_INFINITY;
+
+                        const curId = shape.id();
+                        const allRects = Array.from(this.content.getElementsByClassName('cvat_canvas_shape'))
+                            .filter((el: Element) => el.tagName && el.tagName.toLowerCase() === 'rect') as SVGRectElement[];
+                        for (const el of allRects) {
+                            if ((el as SVGElement).id === curId) continue;
+                            if ((el as SVGElement).classList.contains('cvat_canvas_hidden')) continue;
+                            const bb = el.getBBox();
+                            const candX = [bb.x, bb.x + bb.width];
+                            const candY = [bb.y, bb.y + bb.height];
+
+                            for (const cx of candX) {
+                                const distanceLeft = Math.abs(left - cx);
+                                if (distanceLeft <= threshold && distanceLeft < minDX) {
+                                    minDX = distanceLeft;
+                                    targetX = defaultX + (cx - left);
+                                }
+
+                                const distanceRight = Math.abs(right - cx);
+                                if (distanceRight <= threshold && distanceRight < minDX) {
+                                    minDX = distanceRight;
+                                    targetX = defaultX + (cx - right);
+                                }
+                            }
+
+                            for (const cy of candY) {
+                                const distanceTop = Math.abs(top - cy);
+                                if (distanceTop <= threshold && distanceTop < minDY) {
+                                    minDY = distanceTop;
+                                    targetY = defaultY + (cy - top);
+                                }
+
+                                const distanceBottom = Math.abs(bottom - cy);
+                                if (distanceBottom <= threshold && distanceBottom < minDY) {
+                                    minDY = distanceBottom;
+                                    targetY = defaultY + (cy - bottom);
+                                }
+                            }
+                        }
+
+                        const snappedX = minDX < Number.POSITIVE_INFINITY &&
+                            Math.abs(targetX - defaultX) > Number.EPSILON;
+                        const snappedY = minDY < Number.POSITIVE_INFINITY &&
+                            Math.abs(targetY - defaultY) > Number.EPSILON;
+
+                        if (snappedX || snappedY) {
+                            e.preventDefault();
+                            const finalX = snappedX ? targetX : defaultX;
+                            const finalY = snappedY ? targetY : defaultY;
+                            const moveTarget = handler.el as any;
+                            if (typeof moveTarget.move === 'function') {
+                                moveTarget.move(finalX, finalY);
+                            }
+                        }
+                    }
+                }
+
                 updateAlignmentGuides();
             }).on('dragend', (): void => {
                 if (aborted) {

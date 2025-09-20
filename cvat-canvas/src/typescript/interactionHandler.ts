@@ -37,6 +37,9 @@ export class InteractionHandlerImpl implements InteractionHandler {
     private controlPointsSize: number;
     private selectedShapeOpacity: number;
     private cancelled: boolean;
+    private snapTolerancePx: number;
+    private crosshairHighlightEnabled: boolean;
+    private rectangleSnapEnabled: boolean;
 
     private prepareResult(): InteractionResult[] {
         return this.interactionShapes.map(
@@ -363,13 +366,57 @@ export class InteractionHandlerImpl implements InteractionHandler {
         this.drawnIntermediateShape = null;
         this.controlPointsSize = configuration.controlPointsSize;
         this.selectedShapeOpacity = configuration.selectedShapeOpacity;
+        this.snapTolerancePx = Math.max(0, configuration.snapTolerancePx ?? 2);
+        this.crosshairHighlightEnabled = configuration.highlightCrosshairOverlaps ?? true;
+        this.rectangleSnapEnabled = configuration.enableRectangleDrawingSnap ?? true;
+        this.crosshair.setHighlightEnabled(this.crosshairHighlightEnabled);
         this.cursorPosition = {
             x: 0,
             y: 0,
         };
 
         this.canvas.on('mousemove.interaction', (e: MouseEvent): void => {
-            const [x, y] = translateToSVG((this.canvas.node as any) as SVGSVGElement, [e.clientX, e.clientY]);
+            let [x, y] = translateToSVG((this.canvas.node as any) as SVGSVGElement, [e.clientX, e.clientY]);
+
+            const shouldSnap = !e.ctrlKey && this.rectangleSnapEnabled &&
+                this.interactionData?.shapeType === 'rectangle';
+            if (shouldSnap) {
+                const scale = this.geometry.scale;
+                const threshold = Math.max(0, this.snapTolerancePx) / scale;
+                const rects = Array.from(
+                    (this.canvas.node as any as SVGSVGElement).getElementsByClassName('cvat_canvas_shape'),
+                ).filter((el: Element) => el.tagName && el.tagName.toLowerCase() === 'rect') as SVGRectElement[];
+
+                let bestDX = Number.POSITIVE_INFINITY;
+                let snapX: number | null = null;
+                let bestDY = Number.POSITIVE_INFINITY;
+                let snapY: number | null = null;
+
+                for (const rect of rects) {
+                    if ((rect as any).classList.contains('cvat_canvas_hidden')) continue;
+                    const bb = rect.getBBox();
+                    const candX = [bb.x, bb.x + bb.width];
+                    const candY = [bb.y, bb.y + bb.height];
+                    for (const cx of candX) {
+                        const dx = Math.abs(x - cx);
+                        if (dx <= threshold && dx < bestDX) {
+                            bestDX = dx;
+                            snapX = cx;
+                        }
+                    }
+                    for (const cy of candY) {
+                        const dy = Math.abs(y - cy);
+                        if (dy <= threshold && dy < bestDY) {
+                            bestDY = dy;
+                            snapY = cy;
+                        }
+                    }
+                }
+
+                if (snapX !== null) x = snapX;
+                if (snapY !== null) y = snapY;
+            }
+
             this.cursorPosition = { x, y };
             if (this.crosshair) {
                 this.crosshair.move(x, y);
@@ -455,6 +502,16 @@ export class InteractionHandlerImpl implements InteractionHandler {
     public configure(configuration: Configuration): void {
         this.controlPointsSize = configuration.controlPointsSize;
         this.selectedShapeOpacity = configuration.selectedShapeOpacity;
+        if (typeof configuration.snapTolerancePx === 'number') {
+            this.snapTolerancePx = Math.max(0, configuration.snapTolerancePx);
+        }
+        if (typeof configuration.highlightCrosshairOverlaps === 'boolean') {
+            this.crosshairHighlightEnabled = configuration.highlightCrosshairOverlaps;
+            this.crosshair.setHighlightEnabled(this.crosshairHighlightEnabled);
+        }
+        if (typeof configuration.enableRectangleDrawingSnap === 'boolean') {
+            this.rectangleSnapEnabled = configuration.enableRectangleDrawingSnap;
+        }
 
         if (this.drawnIntermediateShape) {
             this.drawnIntermediateShape.fill({

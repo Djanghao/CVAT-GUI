@@ -47,6 +47,11 @@ const defaultState: SettingsState = {
             buttonVisible: false,
         },
         showTagsOnFrame: true,
+        snapTolerance: 2,
+        highlightCrosshairOverlaps: true,
+        showRectangleAlignmentGuides: true,
+        enableRectangleDrawingSnap: true,
+        enableRectangleMovingSnap: true,
     },
     player: {
         canvasBackgroundColor: '#ffffff',
@@ -233,6 +238,51 @@ export default (state = defaultState, action: AnyAction): SettingsState => {
                 workspace: {
                     ...state.workspace,
                     textFontSize: action.payload.fontSize,
+                },
+            };
+        }
+        case SettingsActionTypes.CHANGE_SNAP_TOLERANCE: {
+            return {
+                ...state,
+                workspace: {
+                    ...state.workspace,
+                    snapTolerance: action.payload.snapTolerance,
+                },
+            };
+        }
+        case SettingsActionTypes.SWITCH_CROSSHAIR_ALIGNMENT_HIGHLIGHT: {
+            return {
+                ...state,
+                workspace: {
+                    ...state.workspace,
+                    highlightCrosshairOverlaps: action.payload.enabled,
+                },
+            };
+        }
+        case SettingsActionTypes.SWITCH_RECTANGLE_ALIGNMENT_GUIDES: {
+            return {
+                ...state,
+                workspace: {
+                    ...state.workspace,
+                    showRectangleAlignmentGuides: action.payload.enabled,
+                },
+            };
+        }
+        case SettingsActionTypes.SWITCH_RECTANGLE_DRAWING_SNAP: {
+            return {
+                ...state,
+                workspace: {
+                    ...state.workspace,
+                    enableRectangleDrawingSnap: action.payload.enabled,
+                },
+            };
+        }
+        case SettingsActionTypes.SWITCH_RECTANGLE_MOVING_SNAP: {
+            return {
+                ...state,
+                workspace: {
+                    ...state.workspace,
+                    enableRectangleMovingSnap: action.payload.enabled,
                 },
             };
         }

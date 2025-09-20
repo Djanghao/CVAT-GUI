@@ -59,6 +59,11 @@ export enum SettingsActionTypes {
     DISABLE_IMAGE_FILTER = 'DISABLE_IMAGE_FILTER',
     RESET_IMAGE_FILTERS = 'RESET_IMAGE_FILTERS',
     CHANGE_SHAPES_ORIENTATION_VISIBILITY = 'CHANGE_SHAPES_ORIENTATION_VISIBILITY',
+    CHANGE_SNAP_TOLERANCE = 'CHANGE_SNAP_TOLERANCE',
+    SWITCH_CROSSHAIR_ALIGNMENT_HIGHLIGHT = 'SWITCH_CROSSHAIR_ALIGNMENT_HIGHLIGHT',
+    SWITCH_RECTANGLE_ALIGNMENT_GUIDES = 'SWITCH_RECTANGLE_ALIGNMENT_GUIDES',
+    SWITCH_RECTANGLE_DRAWING_SNAP = 'SWITCH_RECTANGLE_DRAWING_SNAP',
+    SWITCH_RECTANGLE_MOVING_SNAP = 'SWITCH_RECTANGLE_MOVING_SNAP',
 }
 
 export function changeShapesOpacity(opacity: number): AnyAction {
@@ -247,6 +252,51 @@ export function switchTextContent(textContent: string[]): AnyAction {
         type: SettingsActionTypes.SWITCH_TEXT_CONTENT,
         payload: {
             textContent: textContent.join(','),
+        },
+    };
+}
+
+export function changeSnapTolerance(snapTolerance: number): AnyAction {
+    return {
+        type: SettingsActionTypes.CHANGE_SNAP_TOLERANCE,
+        payload: {
+            snapTolerance,
+        },
+    };
+}
+
+export function switchCrosshairAlignmentHighlight(enabled: boolean): AnyAction {
+    return {
+        type: SettingsActionTypes.SWITCH_CROSSHAIR_ALIGNMENT_HIGHLIGHT,
+        payload: {
+            enabled,
+        },
+    };
+}
+
+export function switchRectangleAlignmentGuides(enabled: boolean): AnyAction {
+    return {
+        type: SettingsActionTypes.SWITCH_RECTANGLE_ALIGNMENT_GUIDES,
+        payload: {
+            enabled,
+        },
+    };
+}
+
+export function switchRectangleDrawingSnap(enabled: boolean): AnyAction {
+    return {
+        type: SettingsActionTypes.SWITCH_RECTANGLE_DRAWING_SNAP,
+        payload: {
+            enabled,
+        },
+    };
+}
+
+export function switchRectangleMovingSnap(enabled: boolean): AnyAction {
+    return {
+        type: SettingsActionTypes.SWITCH_RECTANGLE_MOVING_SNAP,
+        payload: {
+            enabled,
         },
     };
 }

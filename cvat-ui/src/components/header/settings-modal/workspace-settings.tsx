@@ -29,9 +29,14 @@ interface Props {
     defaultApproxPolyAccuracy: number;
     textFontSize: number;
     controlPointsSize: number;
+    snapTolerance: number;
     textPosition: 'center' | 'auto';
     textContent: string;
     showTagsOnFrame: boolean;
+    highlightCrosshairOverlaps: boolean;
+    showRectangleAlignmentGuides: boolean;
+    enableRectangleDrawingSnap: boolean;
+    enableRectangleMovingSnap: boolean;
     onSwitchAutoSave(enabled: boolean): void;
     onChangeAutoSaveInterval(interval: number): void;
     onChangeAAMZoomMargin(margin: number): void;
@@ -43,9 +48,14 @@ interface Props {
     onSwitchIntelligentPolygonCrop(enabled: boolean): void;
     onChangeTextFontSize(fontSize: number): void;
     onChangeControlPointsSize(pointsSize: number): void;
+    onChangeSnapTolerance(pixels: number): void;
     onChangeTextPosition(position: 'auto' | 'center'): void;
     onChangeTextContent(textContent: string[]): void;
     onSwitchShowingTagsOnFrame(enabled: boolean): void;
+    onSwitchCrosshairAlignmentHighlight(enabled: boolean): void;
+    onSwitchRectangleAlignmentGuides(enabled: boolean): void;
+    onSwitchRectangleDrawingSnap(enabled: boolean): void;
+    onSwitchRectangleMovingSnap(enabled: boolean): void;
 }
 
 function WorkspaceSettingsComponent(props: Props): JSX.Element {
@@ -61,9 +71,14 @@ function WorkspaceSettingsComponent(props: Props): JSX.Element {
         defaultApproxPolyAccuracy,
         textFontSize,
         controlPointsSize,
+        snapTolerance,
         textPosition,
         textContent,
         showTagsOnFrame,
+        highlightCrosshairOverlaps,
+        showRectangleAlignmentGuides,
+        enableRectangleDrawingSnap,
+        enableRectangleMovingSnap,
         onSwitchAutoSave,
         onChangeAutoSaveInterval,
         onChangeAAMZoomMargin,
@@ -75,9 +90,14 @@ function WorkspaceSettingsComponent(props: Props): JSX.Element {
         onChangeDefaultApproxPolyAccuracy,
         onChangeTextFontSize,
         onChangeControlPointsSize,
+        onChangeSnapTolerance,
         onChangeTextPosition,
         onChangeTextContent,
         onSwitchShowingTagsOnFrame,
+        onSwitchCrosshairAlignmentHighlight,
+        onSwitchRectangleAlignmentGuides,
+        onSwitchRectangleDrawingSnap,
+        onSwitchRectangleMovingSnap,
     } = props;
 
     const minAutoSaveInterval = 1;
@@ -86,6 +106,8 @@ function WorkspaceSettingsComponent(props: Props): JSX.Element {
     const maxAAMMargin = 1000;
     const minControlPointsSize = 2;
     const maxControlPointsSize = 10;
+    const minSnapTolerance = 0;
+    const maxSnapTolerance = 20;
 
     return (
         <div className='cvat-workspace-settings'>
@@ -154,6 +176,93 @@ function WorkspaceSettingsComponent(props: Props): JSX.Element {
                     <Text type='secondary'>
                         Show text for an object on the canvas not only when the object is activated
                     </Text>
+                </Col>
+            </Row>
+            <Row className='cvat-workspace-settings-section cvat-player-setting'>
+                <Col span={24}>
+                    <Text strong className='cvat-text-color'>CVAT-GUI++ Features</Text>
+                </Col>
+            </Row>
+            <Row className='cvat-workspace-settings-cvat-gui-option cvat-player-setting'>
+                <Col span={24}>
+                    <Checkbox
+                        className='cvat-text-color'
+                        checked={highlightCrosshairOverlaps}
+                        onChange={(event: CheckboxChangeEvent): void => {
+                            onSwitchCrosshairAlignmentHighlight(event.target.checked);
+                        }}
+                    >
+                        Highlight aligned crosshair segments while drawing rectangles
+                    </Checkbox>
+                </Col>
+                <Col span={24}>
+                    <Text type='secondary'>Show dashed overlap for the red crosshair when it aligns with existing rectangles</Text>
+                </Col>
+            </Row>
+            <Row className='cvat-workspace-settings-cvat-gui-option cvat-player-setting'>
+                <Col span={24}>
+                    <Checkbox
+                        className='cvat-text-color'
+                        checked={showRectangleAlignmentGuides}
+                        onChange={(event: CheckboxChangeEvent): void => {
+                            onSwitchRectangleAlignmentGuides(event.target.checked);
+                        }}
+                    >
+                        Show dashed alignment guides when moving rectangles
+                    </Checkbox>
+                </Col>
+                <Col span={24}>
+                    <Text type='secondary'>Display full-length dashed guide lines while dragging near aligned rectangles</Text>
+                </Col>
+            </Row>
+            <Row className='cvat-workspace-settings-cvat-gui-option cvat-player-setting'>
+                <Col span={24}>
+                    <Checkbox
+                        className='cvat-text-color'
+                        checked={enableRectangleDrawingSnap}
+                        onChange={(event: CheckboxChangeEvent): void => {
+                            onSwitchRectangleDrawingSnap(event.target.checked);
+                        }}
+                    >
+                        Snap crosshair to rectangle edges while drawing
+                    </Checkbox>
+                </Col>
+                <Col span={24}>
+                    <Text type='secondary'>Automatically snap the drawing crosshair to nearby horizontal or vertical edges</Text>
+                </Col>
+            </Row>
+            <Row className='cvat-workspace-settings-cvat-gui-option cvat-player-setting'>
+                <Col span={24}>
+                    <Checkbox
+                        className='cvat-text-color'
+                        checked={enableRectangleMovingSnap}
+                        onChange={(event: CheckboxChangeEvent): void => {
+                            onSwitchRectangleMovingSnap(event.target.checked);
+                        }}
+                    >
+                        Snap rectangles to edges while moving
+                    </Checkbox>
+                </Col>
+                <Col span={24}>
+                    <Text type='secondary'>Snap dragged rectangles to nearby edges for precise alignment</Text>
+                </Col>
+            </Row>
+            <Row className='cvat-workspace-settings-snap-tolerance cvat-player-setting'>
+                <Col>
+                    <Text className='cvat-text-color'> Snap tolerance (px) </Text>
+                    <InputNumber
+                        min={minSnapTolerance}
+                        max={maxSnapTolerance}
+                        value={snapTolerance}
+                        disabled={!enableRectangleDrawingSnap && !enableRectangleMovingSnap}
+                        onChange={(value: number | undefined | string): void => {
+                            if (typeof value !== 'undefined') {
+                                onChangeSnapTolerance(
+                                    Math.floor(clamp(+value, minSnapTolerance, maxSnapTolerance)),
+                                );
+                            }
+                        }}
+                    />
                 </Col>
             </Row>
             <Row className='cvat-workspace-settings-text-settings cvat-player-setting'>

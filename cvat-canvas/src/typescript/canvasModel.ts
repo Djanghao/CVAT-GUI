@@ -98,6 +98,12 @@ export interface Configuration {
     outlinedBorders?: string | false;
     resetZoom?: boolean;
     hideEditedObject?: boolean;
+    // Snap tolerance in screen pixels at scale = 1
+    snapTolerancePx?: number;
+    highlightCrosshairOverlaps?: boolean;
+    showRectangleAlignmentGuides?: boolean;
+    enableRectangleDrawingSnap?: boolean;
+    enableRectangleMovingSnap?: boolean;
 }
 
 export interface BrushTool {
@@ -420,6 +426,11 @@ export class CanvasModelImpl extends MasterImpl implements CanvasModel {
                 textContent: consts.DEFAULT_SHAPE_TEXT_CONTENT,
                 undefinedAttrValue: consts.DEFAULT_UNDEFINED_ATTR_VALUE,
                 hideEditedObject: false,
+                snapTolerancePx: 2,
+                highlightCrosshairOverlaps: true,
+                showRectangleAlignmentGuides: true,
+                enableRectangleDrawingSnap: true,
+                enableRectangleMovingSnap: true,
             },
             imageBitmap: false,
             image: null,
@@ -1014,6 +1025,26 @@ export class CanvasModelImpl extends MasterImpl implements CanvasModel {
 
         if (typeof configuration.hideEditedObject === 'boolean') {
             this.data.configuration.hideEditedObject = configuration.hideEditedObject;
+        }
+
+        if (typeof configuration.snapTolerancePx === 'number' && configuration.snapTolerancePx >= 0) {
+            this.data.configuration.snapTolerancePx = configuration.snapTolerancePx;
+        }
+
+        if (typeof configuration.highlightCrosshairOverlaps === 'boolean') {
+            this.data.configuration.highlightCrosshairOverlaps = configuration.highlightCrosshairOverlaps;
+        }
+
+        if (typeof configuration.showRectangleAlignmentGuides === 'boolean') {
+            this.data.configuration.showRectangleAlignmentGuides = configuration.showRectangleAlignmentGuides;
+        }
+
+        if (typeof configuration.enableRectangleDrawingSnap === 'boolean') {
+            this.data.configuration.enableRectangleDrawingSnap = configuration.enableRectangleDrawingSnap;
+        }
+
+        if (typeof configuration.enableRectangleMovingSnap === 'boolean') {
+            this.data.configuration.enableRectangleMovingSnap = configuration.enableRectangleMovingSnap;
         }
 
         this.notify(UpdateReasons.CONFIG_UPDATED);
