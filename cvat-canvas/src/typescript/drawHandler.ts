@@ -115,6 +115,7 @@ export class DrawHandlerImpl implements DrawHandler {
     private snapTolerancePx: number;
     private crosshairHighlightEnabled: boolean;
     private rectangleSnapEnabled: boolean;
+    private drawingSnapActive: boolean;
 
     // we should use any instead of SVG.Shape because svg plugins cannot change declared interface
     // so, methods like draw() just undefined for SVG.Shape, but nevertheless they exist
@@ -435,7 +436,11 @@ export class DrawHandlerImpl implements DrawHandler {
         this.drawInstance = this.canvas.rect();
         this.drawInstance
             .on('drawstop', (e: Event): void => {
-                const points = readPointsFromShape((e.target as any as { instance: SVG.Rect }).instance);
+                let points = readPointsFromShape((e.target as any as { instance: SVG.Rect }).instance);
+                // Snap final rectangle edges to existing edges if snapping is active
+                if (this.drawingSnapActive && this.rectangleSnapEnabled) {
+                    points = this.snapRectCanvasPoints(points);
+                }
                 const [xtl, ytl, xbr, ybr] = this.getFinalRectCoordinates(points, true);
                 const { shapeType, redraw: clientID } = this.drawData;
 
@@ -464,6 +469,69 @@ export class DrawHandlerImpl implements DrawHandler {
                 'fill-opacity': this.selectedShapeOpacity,
                 stroke: this.outlinedBorders,
             });
+    }
+
+    // Snap rectangle canvas coordinates [xtl, ytl, xbr, ybr] to exact existing rect edges
+    private snapRectCanvasPoints(points: number[]): number[] {
+        const scale = this.geometry.scale;
+        const threshold = Math.max(0, this.snapTolerancePx) / scale;
+
+        let [xtl, ytl, xbr, ybr] = points;
+        let bestLeftDX = Number.POSITIVE_INFINITY;
+        let bestRightDX = Number.POSITIVE_INFINITY;
+        let bestTopDY = Number.POSITIVE_INFINITY;
+        let bestBottomDY = Number.POSITIVE_INFINITY;
+
+        let snapLeft = xtl;
+        let snapRight = xbr;
+        let snapTop = ytl;
+        let snapBottom = ybr;
+
+        const rects = Array.from(
+            (this.canvas.node as any as SVGSVGElement).getElementsByClassName('cvat_canvas_shape'),
+        ).filter((el: Element) => el.tagName && el.tagName.toLowerCase() === 'rect') as SVGRectElement[];
+
+        for (const rect of rects) {
+            if ((rect as any).classList.contains('cvat_canvas_hidden')) continue;
+            const bb = rect.getBBox();
+            const candX = [bb.x, bb.x + bb.width];
+            const candY = [bb.y, bb.y + bb.height];
+
+            for (const cx of candX) {
+                const dLeft = Math.abs(xtl - cx);
+                if (dLeft <= threshold && dLeft < bestLeftDX) {
+                    bestLeftDX = dLeft;
+                    snapLeft = cx;
+                }
+
+                const dRight = Math.abs(xbr - cx);
+                if (dRight <= threshold && dRight < bestRightDX) {
+                    bestRightDX = dRight;
+                    snapRight = cx;
+                }
+            }
+
+            for (const cy of candY) {
+                const dTop = Math.abs(ytl - cy);
+                if (dTop <= threshold && dTop < bestTopDY) {
+                    bestTopDY = dTop;
+                    snapTop = cy;
+                }
+
+                const dBottom = Math.abs(ybr - cy);
+                if (dBottom <= threshold && dBottom < bestBottomDY) {
+                    bestBottomDY = dBottom;
+                    snapBottom = cy;
+                }
+            }
+        }
+
+        if (bestLeftDX < Number.POSITIVE_INFINITY) xtl = snapLeft;
+        if (bestRightDX < Number.POSITIVE_INFINITY) xbr = snapRight;
+        if (bestTopDY < Number.POSITIVE_INFINITY) ytl = snapTop;
+        if (bestBottomDY < Number.POSITIVE_INFINITY) ybr = snapBottom;
+
+        return [xtl, ytl, xbr, ybr];
     }
 
     private drawEllipse(): void {
@@ -552,7 +620,10 @@ export class DrawHandlerImpl implements DrawHandler {
                 // finish if numberOfPoints are exactly four
                 if (numberOfPoints === 4) {
                     const bbox = (e.target as SVGPolylineElement).getBBox();
-                    const points = [bbox.x, bbox.y, bbox.x + bbox.width, bbox.y + bbox.height];
+                    let points = [bbox.x, bbox.y, bbox.x + bbox.width, bbox.y + bbox.height];
+                    if (this.drawingSnapActive && this.rectangleSnapEnabled) {
+                        points = this.snapRectCanvasPoints(points);
+                    }
                     const [xtl, ytl, xbr, ybr] = this.getFinalRectCoordinates(points, true);
                     const { shapeType, redraw: clientID } = this.drawData;
                     this.cancel();
@@ -1196,6 +1267,9 @@ export class DrawHandlerImpl implements DrawHandler {
                 const useSnappedStart = this.drawData?.shapeType === 'rectangle' &&
                     this.rectangleSnapEnabled && !e.ctrlKey;
 
+                // Initialize the session snapping flag based on the start intent
+                this.drawingSnapActive = useSnappedStart;
+
                 const startEvent = (() => {
                     if (!useSnappedStart) return e;
 
@@ -1336,12 +1410,13 @@ export class DrawHandlerImpl implements DrawHandler {
         this.crosshairHighlightEnabled = configuration.highlightCrosshairOverlaps ?? true;
         this.rectangleSnapEnabled = configuration.enableRectangleDrawingSnap ?? true;
         this.crosshair.setHighlightEnabled(this.crosshairHighlightEnabled);
+        this.drawingSnapActive = false;
         this.drawInstance = null;
         this.pointsGroup = null;
         this.cursorPosition = {
             x: 0,
             y: 0,
-        };
+            };
 
         this.canvas.on('mousemove.crosshair', (e: MouseEvent): void => {
             let [x, y] = translateToSVG((this.canvas.node as any) as SVGSVGElement, [e.clientX, e.clientY]);
@@ -1387,6 +1462,8 @@ export class DrawHandlerImpl implements DrawHandler {
             }
 
             this.cursorPosition = { x, y };
+            // Track whether snapping should be applied for this drawing session
+            this.drawingSnapActive = shouldSnap;
             if (this.crosshair) {
                 this.crosshair.move(x, y);
             }
@@ -1567,5 +1644,6 @@ export class DrawHandlerImpl implements DrawHandler {
     public cancel(): void {
         this.canceled = true;
         this.release();
+        this.drawingSnapActive = false;
     }
 }
