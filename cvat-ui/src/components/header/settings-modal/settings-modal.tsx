@@ -17,7 +17,7 @@ import { restoreSettingsAsync, updateCachedSettings } from 'actions/settings-act
 import WorkspaceSettingsContainer from 'containers/header/settings-modal/workspace-settings';
 import PlayerSettingsContainer from 'containers/header/settings-modal/player-settings';
 import ShortcutsSettingsContainer from 'containers/header/settings-modal/shortcuts-settings';
-import CvatGuiPlusSettingsContainer from 'containers/header/settings-modal/cvat-gui-plus-settings';
+import FastCvatSettingsContainer from 'containers/header/settings-modal/fast-cvat-settings';
 import { CombinedState } from 'reducers';
 
 interface SettingsModalProps {
@@ -74,10 +74,10 @@ function SettingsModal(props: SettingsModalProps): JSX.Element {
             children: <ShortcutsSettingsContainer />,
         },
         {
-            key: 'cvat-gui-plus',
-            label: <Text strong className='cvat-settings-gui-plus-tab-label'>CVAT-GUI++ Features</Text>,
+            key: 'fast-cvat',
+            label: <Text strong className='fast-cvat-settings-tab-label'>FastCVAT Features</Text>,
             icon: <PlusSquareOutlined />,
-            children: <CvatGuiPlusSettingsContainer />,
+            children: <FastCvatSettingsContainer />,
         },
     ];
 
