@@ -6,6 +6,8 @@ export function getKeyfromCode(code: string): string | null {
         AltRight: 'alt',
         ShiftLeft: 'shift',
         ShiftRight: 'shift',
+        MetaLeft: 'meta',
+        MetaRight: 'meta',
         Space: 'space',
         Escape: 'esc',
         Digit1: '1',
@@ -110,5 +112,5 @@ export function getKeyfromCode(code: string): string | null {
 }
 
 export function isModifier(key: string): boolean {
-    return key === 'ctrl' || key === 'alt' || key === 'shift';
+    return key === 'ctrl' || key === 'alt' || key === 'shift' || key === 'meta';
 }

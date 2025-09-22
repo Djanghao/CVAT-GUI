@@ -75,7 +75,7 @@ function SettingsModal(props: SettingsModalProps): JSX.Element {
         },
         {
             key: 'fast-cvat',
-            label: <Text strong className='fast-cvat-settings-tab-label'>FastCVAT Features</Text>,
+            label: <Text>FastCVAT Features</Text>,
             icon: <PlusSquareOutlined />,
             children: <FastCvatSettingsContainer />,
         },

@@ -46,6 +46,7 @@ interface DispatchToProps {
     onToggleEqualSpacingAssistOnDrag(enabled: boolean): void;
     onChangeAssistModifier(mod: 'control' | 'alt' | 'shift' | 'meta'): void;
     onChangeEqualSpacingModifier(mod: 'control' | 'alt' | 'shift' | 'meta'): void;
+    onUpdateShortcut(shortcutID: string, sequences: string[]): void;
 }
 
 function mapStateToProps(state: CombinedState): StateToProps {
@@ -113,6 +114,9 @@ function mapDispatchToProps(dispatch: Dispatch): DispatchToProps {
         },
         onChangeEqualSpacingModifier(mod: 'control' | 'alt' | 'shift' | 'meta'): void {
             dispatch(changeEqualSpacingModifier(mod));
+        },
+        onUpdateShortcut(shortcutID: string, sequences: string[]): void {
+            dispatch(shortcutsActions.updateSequence(shortcutID, sequences));
         },
     };
 }

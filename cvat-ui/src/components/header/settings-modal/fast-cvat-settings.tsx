@@ -12,8 +12,53 @@ import Modal from 'antd/lib/modal';
 
 import MultipleShortcutsDisplay from './multiple-shortcuts-display';
 import { KeyMap, KeyMapItem } from 'utils/mousetrap-react';
+import { registerComponentShortcuts } from 'actions/shortcuts-actions';
+import { ShortcutScope } from 'utils/enums';
+import { getCVATStore } from 'cvat-store';
 
 import { clamp } from 'utils/math';
+
+type ModifierKey = 'control' | 'alt' | 'shift' | 'meta';
+
+const MODIFIER_TO_SEQUENCE: Record<ModifierKey, string> = {
+    control: 'ctrl',
+    alt: 'alt',
+    shift: 'shift',
+    meta: 'meta',
+};
+
+const SEQUENCE_TO_MODIFIER: Record<string, ModifierKey> = {
+    ctrl: 'control',
+    alt: 'alt',
+    shift: 'shift',
+    meta: 'meta',
+};
+
+const DEFAULT_ASSIST_MODIFIER: ModifierKey = 'control';
+const DEFAULT_EQUAL_MODIFIER: ModifierKey = 'alt';
+
+const storeState = getCVATStore().getState();
+const workspaceSettings = storeState.settings?.workspace ?? {};
+
+const initialAssistModifier = (workspaceSettings.assistModifier as ModifierKey) || DEFAULT_ASSIST_MODIFIER;
+const initialEqualModifier = (workspaceSettings.equalSpacingModifier as ModifierKey) || DEFAULT_EQUAL_MODIFIER;
+
+registerComponentShortcuts({
+    FAST_CVAT_ASSIST_MOD: {
+        name: 'Assist modifier',
+        description: 'Hold to temporarily disable draw/move snapping & guides',
+        sequences: [MODIFIER_TO_SEQUENCE[initialAssistModifier] || MODIFIER_TO_SEQUENCE[DEFAULT_ASSIST_MODIFIER]],
+        scope: ShortcutScope.FAST_CVAT,
+        displayWeight: 0,
+    },
+    FAST_CVAT_EQUAL_MOD: {
+        name: 'Equal-spacing modifier',
+        description: 'Hold to temporarily disable equal-spacing hints/snaps',
+        sequences: [MODIFIER_TO_SEQUENCE[initialEqualModifier] || MODIFIER_TO_SEQUENCE[DEFAULT_EQUAL_MODIFIER]],
+        scope: ShortcutScope.FAST_CVAT,
+        displayWeight: 1,
+    },
+});
 
 interface Props {
     rectangleDrawingAssistEnabled: boolean;
@@ -23,8 +68,8 @@ interface Props {
     autoRectangleOnLabelSwitch: boolean;
     enableEqualSpacingAssist: boolean;
     enableEqualSpacingAssistOnDrag: boolean;
-    assistModifier: 'control' | 'alt' | 'shift' | 'meta';
-    equalSpacingModifier: 'control' | 'alt' | 'shift' | 'meta';
+    assistModifier: ModifierKey;
+    equalSpacingModifier: ModifierKey;
     keyMap: KeyMap;
     onToggleRectangleDrawingAssist(enabled: boolean): void;
     onToggleRectangleMovingAssist(enabled: boolean): void;
@@ -33,8 +78,9 @@ interface Props {
     onSwitchAutoRectangleOnLabelSwitch(enabled: boolean): void;
     onToggleEqualSpacingAssist(enabled: boolean): void;
     onToggleEqualSpacingAssistOnDrag(enabled: boolean): void;
-    onChangeAssistModifier(mod: 'control' | 'alt' | 'shift' | 'meta'): void;
-    onChangeEqualSpacingModifier(mod: 'control' | 'alt' | 'shift' | 'meta'): void;
+    onChangeAssistModifier(mod: ModifierKey): void;
+    onChangeEqualSpacingModifier(mod: ModifierKey): void;
+    onUpdateShortcut(shortcutID: string, sequences: string[]): void;
 }
 
 function FastCvatSettingsComponent(props: Props): JSX.Element {
@@ -57,43 +103,124 @@ function FastCvatSettingsComponent(props: Props): JSX.Element {
         onToggleEqualSpacingAssistOnDrag,
         onChangeAssistModifier,
         onChangeEqualSpacingModifier,
+        onUpdateShortcut,
+        keyMap,
     } = props;
 
     const minSnapTolerance = 0;
     const maxSnapTolerance = 20;
 
-    const { keyMap } = props;
+    const enhancedKeyMap: KeyMap = { ...keyMap };
 
-    const buildFakeItem = (id: string, name: string, desc: string, seq: string): { id: string; item: KeyMapItem } => ({
-        id,
-        item: {
-            name,
-            description: desc,
-            sequences: seq ? [seq] : [],
-            scope: 'FAST_CVAT',
-        },
-    } as any);
+    const ensureShortcutItem = (
+        id: 'FAST_CVAT_ASSIST_MOD' | 'FAST_CVAT_EQUAL_MOD',
+        name: string,
+        description: string,
+        sequence: string,
+        displayWeight: number,
+    ): KeyMapItem => {
+        if (!enhancedKeyMap[id]) {
+            enhancedKeyMap[id] = {
+                name,
+                description,
+                sequences: [sequence],
+                scope: ShortcutScope.FAST_CVAT,
+                displayWeight,
+            } as KeyMapItem;
+        }
+        return enhancedKeyMap[id];
+    };
 
-    const onUpdateModifier = (
-        current: 'control' | 'alt' | 'shift' | 'meta',
-        updated: string[],
-        onChange: (mod: 'control' | 'alt' | 'shift' | 'meta') => void,
-    ) => {
-        const last = updated[updated.length - 1] || '';
-        if (['ctrl', 'alt', 'shift'].includes(last)) {
-            const map: Record<string, 'control' | 'alt' | 'shift'> = { ctrl: 'control', alt: 'alt', shift: 'shift' };
-            onChange(map[last]);
+    const assistSequence = MODIFIER_TO_SEQUENCE[assistModifier] || MODIFIER_TO_SEQUENCE[DEFAULT_ASSIST_MODIFIER];
+    const equalSequence = MODIFIER_TO_SEQUENCE[equalSpacingModifier] || MODIFIER_TO_SEQUENCE[DEFAULT_EQUAL_MODIFIER];
+
+    const assistShortcutItem = ensureShortcutItem(
+        'FAST_CVAT_ASSIST_MOD',
+        'Assist modifier',
+        'Hold to temporarily disable draw/move snapping & guides',
+        assistSequence,
+        0,
+    );
+
+    const equalShortcutItem = ensureShortcutItem(
+        'FAST_CVAT_EQUAL_MOD',
+        'Equal-spacing modifier',
+        'Hold to temporarily disable equal-spacing hints/snaps',
+        equalSequence,
+        1,
+    );
+
+    const parseModifierSequence = (updated: string[]): { mod: ModifierKey; sequence: string } | 'clear' | 'invalid' => {
+        if (!updated.length) {
+            return 'clear';
+        }
+
+        const last = updated[updated.length - 1];
+        if (!last) {
+            return 'invalid';
+        }
+
+        const normalized = last.toLowerCase().trim();
+        const tokens = normalized.split('+').filter(Boolean);
+        if (tokens.length !== 1) {
+            return 'invalid';
+        }
+
+        const token = tokens[0];
+        if (!(token in SEQUENCE_TO_MODIFIER)) {
+            return 'invalid';
+        }
+
+        return {
+            mod: SEQUENCE_TO_MODIFIER[token],
+            sequence: token,
+        };
+    };
+
+    const handleAssistShortcutUpdate = (updated: string[]): void => {
+        const parsed = parseModifierSequence(updated);
+        if (parsed === 'invalid') {
+            Modal.error({
+                title: 'Only modifier allowed',
+                content: 'Please press only one of: Ctrl, Alt, Shift, or Meta',
+            });
             return;
         }
-        if (updated.length === 0) {
-            // reset to default on clear
-            onChange('control');
+
+        if (parsed === 'clear') {
+            const fallbackSequence = MODIFIER_TO_SEQUENCE[DEFAULT_ASSIST_MODIFIER];
+            onChangeAssistModifier(DEFAULT_ASSIST_MODIFIER);
+            onUpdateShortcut('FAST_CVAT_ASSIST_MOD', [fallbackSequence]);
             return;
         }
-        Modal.error({
-            title: 'Only modifier allowed',
-            content: 'Please press only one of: Ctrl, Alt, or Shift',
-        });
+
+        if (assistModifier !== parsed.mod) {
+            onChangeAssistModifier(parsed.mod);
+        }
+        onUpdateShortcut('FAST_CVAT_ASSIST_MOD', [parsed.sequence]);
+    };
+
+    const handleEqualShortcutUpdate = (updated: string[]): void => {
+        const parsed = parseModifierSequence(updated);
+        if (parsed === 'invalid') {
+            Modal.error({
+                title: 'Only modifier allowed',
+                content: 'Please press only one of: Ctrl, Alt, Shift, or Meta',
+            });
+            return;
+        }
+
+        if (parsed === 'clear') {
+            const fallbackSequence = MODIFIER_TO_SEQUENCE[DEFAULT_EQUAL_MODIFIER];
+            onChangeEqualSpacingModifier(DEFAULT_EQUAL_MODIFIER);
+            onUpdateShortcut('FAST_CVAT_EQUAL_MOD', [fallbackSequence]);
+            return;
+        }
+
+        if (equalSpacingModifier !== parsed.mod) {
+            onChangeEqualSpacingModifier(parsed.mod);
+        }
+        onUpdateShortcut('FAST_CVAT_EQUAL_MOD', [parsed.sequence]);
     };
 
     return (
@@ -229,15 +356,9 @@ function FastCvatSettingsComponent(props: Props): JSX.Element {
                     <div>
                         <MultipleShortcutsDisplay
                             id='FAST_CVAT_ASSIST_MOD'
-                            keyMap={{} as any}
-                            item={buildFakeItem(
-                                'FAST_CVAT_ASSIST_MOD',
-                                'Assist modifier',
-                                'Hold to temporarily disable draw/move snapping & guides',
-                                assistModifier === 'control' ? 'ctrl' : assistModifier,
-                            ).item}
-                            onKeySequenceUpdate={(shortcutID: string, updated: string[]) =>
-                                onUpdateModifier(assistModifier, updated, onChangeAssistModifier)}
+                            keyMap={enhancedKeyMap}
+                            item={assistShortcutItem}
+                            onKeySequenceUpdate={(_, updated: string[]) => handleAssistShortcutUpdate(updated)}
                         />
                     </div>
                 </Col>
@@ -246,15 +367,9 @@ function FastCvatSettingsComponent(props: Props): JSX.Element {
                     <div>
                         <MultipleShortcutsDisplay
                             id='FAST_CVAT_EQUAL_MOD'
-                            keyMap={{} as any}
-                            item={buildFakeItem(
-                                'FAST_CVAT_EQUAL_MOD',
-                                'Equal-spacing modifier',
-                                'Hold to temporarily disable equal-spacing hints/snaps',
-                                equalSpacingModifier === 'control' ? 'ctrl' : equalSpacingModifier,
-                            ).item}
-                            onKeySequenceUpdate={(shortcutID: string, updated: string[]) =>
-                                onUpdateModifier(equalSpacingModifier, updated, onChangeEqualSpacingModifier)}
+                            keyMap={enhancedKeyMap}
+                            item={equalShortcutItem}
+                            onKeySequenceUpdate={(_, updated: string[]) => handleEqualShortcutUpdate(updated)}
                         />
                     </div>
                 </Col>
