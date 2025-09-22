@@ -90,7 +90,9 @@ export class CanvasViewImpl implements CanvasView, Listener {
     private draggableShape: SVG.Shape | null;
     private resizableShape: SVG.Shape | null;
     private ctrlPressed: boolean;
+    private equalSpacingPressed: boolean;
     private alignmentGuideId: string | null;
+    private spacingGuideGroupDrag: SVG.G | null;
     private innerObjectsFlags: {
         drawHidden: Record<number, boolean>;
         editHidden: Record<number, boolean>;
@@ -1285,6 +1287,192 @@ export class CanvasViewImpl implements CanvasView, Listener {
                 for (const x of xGuides) drawV(x);
             };
 
+            // Equal-spacing guides for moving rectangles
+            const clearSpacingGuidesDrag = (): void => {
+                if (this.spacingGuideGroupDrag) {
+                    this.spacingGuideGroupDrag.remove();
+                    this.spacingGuideGroupDrag = null;
+                }
+            };
+
+            const renderSpacingGuidesDrag = (guides: Array<[number, number, number, number]>): void => {
+                if (!guides.length) {
+                    clearSpacingGuidesDrag();
+                    return;
+                }
+                clearSpacingGuidesDrag();
+                this.spacingGuideGroupDrag = this.adoptedContent.group();
+
+                const scale = this.geometry.scale;
+                const dashedStrokeWidth = consts.BASE_STROKE_WIDTH / (1 * scale);
+                const haloWidth = Math.max(dashedStrokeWidth * 1.8, 3 / scale);
+                const dashLen = Math.max(8 / scale, 6 / scale);
+                const dashArray = `${dashLen} ${dashLen}`;
+
+                for (const [x1, y1, x2, y2] of guides) {
+                    this.spacingGuideGroupDrag
+                        .line(x1, y1, x2, y2)
+                        .attr({
+                            'stroke-width': haloWidth,
+                            'stroke-linecap': 'round',
+                            'stroke-dasharray': dashArray,
+                            'stroke-opacity': 0.6,
+                            'shape-rendering': 'geometricprecision',
+                            'pointer-events': 'none',
+                        })
+                        .style({ stroke: '#000' });
+
+                    this.spacingGuideGroupDrag
+                        .line(x1, y1, x2, y2)
+                        .attr({
+                            'stroke-width': dashedStrokeWidth,
+                            'stroke-linecap': 'round',
+                            'stroke-dasharray': dashArray,
+                            'shape-rendering': 'geometricprecision',
+                            'pointer-events': 'none',
+                        })
+                        .style({ stroke: '#4FC3F7' });
+                }
+            };
+
+            const computeEqualSpacingSnapForMove = (
+                left: number,
+                top: number,
+                width: number,
+                height: number,
+                threshold: number,
+            ): { snapX: number | null; snapY: number | null; guides: Array<[number, number, number, number]> } => {
+                const rectEls = Array.from(
+                    this.content.getElementsByClassName('cvat_canvas_shape'),
+                ).filter((el: Element) => el.tagName && el.tagName.toLowerCase() === 'rect') as SVGRectElement[];
+
+                type R = { left: number; right: number; top: number; bottom: number };
+                const rects: R[] = [];
+                const curId = shape.id();
+                for (const el of rectEls) {
+                    if ((el as SVGElement).id === curId) continue;
+                    if ((el as SVGElement).classList.contains('cvat_canvas_hidden')) continue;
+                    const bb = el.getBBox();
+                    rects.push({ left: bb.x, right: bb.x + bb.width, top: bb.y, bottom: bb.y + bb.height });
+                }
+
+                const guides: Array<[number, number, number, number]> = [];
+                let bestDX = Number.POSITIVE_INFINITY;
+                let bestDY = Number.POSITIVE_INFINITY;
+                let snapX: number | null = null;
+                let snapY: number | null = null;
+
+                if (rects.length < 2) {
+                    return { snapX, snapY, guides };
+                }
+
+                const mapBy = <K extends keyof R>(key: K): Map<number, R[]> => {
+                    const m = new Map<number, R[]>();
+                    for (const r of rects) {
+                        const v = r[key];
+                        const arr = m.get(v) ?? [];
+                        arr.push(r);
+                        m.set(v, arr);
+                    }
+                    return m;
+                };
+
+                const tops = mapBy('top');
+                const bottoms = mapBy('bottom');
+                const lefts = mapBy('left');
+                const rights = mapBy('right');
+
+                const pushGuideH = (yLine: number, x1: number, x2: number) => { guides.push([x1, yLine, x2, yLine]); };
+                const pushGuideV = (xLine: number, y1: number, y2: number) => { guides.push([xLine, y1, xLine, y2]); };
+
+                const processHorizontalGroup = (group: R[], yLine: number) => {
+                    if (group.length < 2) return;
+                    if (Math.abs(top - yLine) > threshold && Math.abs(top + height - yLine) > threshold) return;
+                    const arr = [...group].sort((a, b) => a.left - b.left);
+                    const gaps: Array<{ d: number; from: R; to: R }> = [];
+                    for (let i = 0; i < arr.length - 1; i++) {
+                        const d = arr[i + 1].left - arr[i].right;
+                        if (d > 0) gaps.push({ d, from: arr[i], to: arr[i + 1] });
+                    }
+                    if (!gaps.length) return;
+
+                    let refIdx = 0;
+                    let refDist = Number.POSITIVE_INFINITY;
+                    for (let i = 0; i < gaps.length; i++) {
+                        const mid = (gaps[i].from.right + gaps[i].to.left) / 2;
+                        const dist = Math.abs(left - mid);
+                        if (dist < refDist) { refIdx = i; refDist = dist; }
+                    }
+                    const refGap = gaps[refIdx];
+                    const d = refGap.d;
+                    const leftMost = arr[0];
+                    const rightMost = arr[arr.length - 1];
+
+                    for (const g of gaps) {
+                        if (Math.abs(g.d - d) <= threshold) pushGuideH(yLine, g.from.right, g.to.left);
+                    }
+
+                    const candRight = rightMost.right + d;
+                    const dxR = Math.abs(left - candRight);
+                    if (dxR <= threshold && dxR < bestDX) {
+                        bestDX = dxR; snapX = candRight; pushGuideH(yLine, rightMost.right, candRight);
+                    }
+
+                    const candLeft = leftMost.left - d;
+                    const dxL = Math.abs(left - candLeft);
+                    if (dxL <= threshold && dxL < bestDX) {
+                        bestDX = dxL; snapX = candLeft; pushGuideH(yLine, candLeft, leftMost.left);
+                    }
+                };
+
+                const processVerticalGroup = (group: R[], xLine: number) => {
+                    if (group.length < 2) return;
+                    if (Math.abs(left - xLine) > threshold && Math.abs(left + width - xLine) > threshold) return;
+                    const arr = [...group].sort((a, b) => a.top - b.top);
+                    const gaps: Array<{ d: number; from: R; to: R }> = [];
+                    for (let i = 0; i < arr.length - 1; i++) {
+                        const d = arr[i + 1].top - arr[i].bottom;
+                        if (d > 0) gaps.push({ d, from: arr[i], to: arr[i + 1] });
+                    }
+                    if (!gaps.length) return;
+
+                    let refIdx = 0;
+                    let refDist = Number.POSITIVE_INFINITY;
+                    for (let i = 0; i < gaps.length; i++) {
+                        const mid = (gaps[i].from.bottom + gaps[i].to.top) / 2;
+                        const dist = Math.abs(top - mid);
+                        if (dist < refDist) { refIdx = i; refDist = dist; }
+                    }
+                    const refGap = gaps[refIdx];
+                    const d = refGap.d;
+                    const topMost = arr[0];
+                    const bottomMost = arr[arr.length - 1];
+
+                    for (const g of gaps) {
+                        if (Math.abs(g.d - d) <= threshold) pushGuideV(xLine, g.from.bottom, g.to.top);
+                    }
+
+                    const candDown = bottomMost.bottom + d;
+                    const dyD = Math.abs(top - candDown);
+                    if (dyD <= threshold && dyD < bestDY) {
+                        bestDY = dyD; snapY = candDown; pushGuideV(xLine, bottomMost.bottom, candDown);
+                    }
+
+                    const candUp = topMost.top - d;
+                    const dyU = Math.abs(top - candUp);
+                    if (dyU <= threshold && dyU < bestDY) {
+                        bestDY = dyU; snapY = candUp; pushGuideV(xLine, candUp, topMost.top);
+                    }
+                };
+
+                tops.forEach((group, yLine) => processHorizontalGroup(group, yLine));
+                bottoms.forEach((group, yLine) => processHorizontalGroup(group, yLine));
+                lefts.forEach((group, xLine) => processVerticalGroup(group, xLine));
+                rights.forEach((group, xLine) => processVerticalGroup(group, xLine));
+
+                return { snapX, snapY, guides };
+            };
+
             draggableInstance.on('dragstart', (): void => {
                 onDragStart();
                 this.draggableShape = shape;
@@ -1319,7 +1507,11 @@ export class CanvasViewImpl implements CanvasView, Listener {
                     setupSkeletonEdges(shape as SVG.G, skeletonSVGTemplate);
                 }
 
-                // Snap dragging rectangle edges to nearby bbox edges unless Ctrl is pressed
+                // Prepare edge snap candidates (unless Ctrl is pressed)
+                let edgeSnapX: number | null = null;
+                let edgeSnapY: number | null = null;
+                let edgeDX = Number.POSITIVE_INFINITY;
+                let edgeDY = Number.POSITIVE_INFINITY;
                 if (state.shapeType === 'rectangle' && !this.ctrlPressed &&
                     (this.configuration.enableRectangleMovingSnap ?? true)) {
                     const detail = e.detail as any;
@@ -1386,15 +1578,57 @@ export class CanvasViewImpl implements CanvasView, Listener {
                             }
                         }
 
-                        const snappedX = minDX < Number.POSITIVE_INFINITY &&
-                            Math.abs(targetX - defaultX) > Number.EPSILON;
-                        const snappedY = minDY < Number.POSITIVE_INFINITY &&
-                            Math.abs(targetY - defaultY) > Number.EPSILON;
+                        const snappedX = minDX < Number.POSITIVE_INFINITY && Math.abs(targetX - defaultX) > Number.EPSILON;
+                        const snappedY = minDY < Number.POSITIVE_INFINITY && Math.abs(targetY - defaultY) > Number.EPSILON;
+                        if (snappedX) { edgeSnapX = targetX; edgeDX = Math.abs(targetX - defaultX); }
+                        if (snappedY) { edgeSnapY = targetY; edgeDY = Math.abs(targetY - defaultY); }
+                    }
+                }
 
-                        if (snappedX || snappedY) {
+                // Equal-spacing while moving. Disabled if equal-spacing modifier is pressed.
+                let eqGuides: Array<[number, number, number, number]> = [];
+                let eqSnapX: number | null = null;
+                let eqSnapY: number | null = null;
+                let eqDX = Number.POSITIVE_INFINITY;
+                let eqDY = Number.POSITIVE_INFINITY;
+                const eqEnabled = ((this.configuration as any).enableEqualSpacingMovingAssist ?? true) as boolean;
+                if (state.shapeType === 'rectangle' && eqEnabled && !this.equalSpacingPressed) {
+                    const detail = e.detail as any;
+                    const handler = detail?.handler;
+                    const pointer = detail?.p;
+                    const startPoints = handler?.startPoints;
+                    if (handler && pointer && startPoints?.box && startPoints?.point) {
+                        const scale = this.geometry.scale;
+                        const thresholdEq = Math.max(0, ((this.configuration as any).equalSpacingTolerancePx ??
+                            (this.configuration as any).snapTolerancePx ?? 2)) / scale;
+                        const { box, point } = startPoints;
+                        const defaultX = box.x + pointer.x - point.x;
+                        const defaultY = box.y + pointer.y - point.y;
+                        const { width, height } = box;
+                        const eq = computeEqualSpacingSnapForMove(defaultX, defaultY, width, height, thresholdEq);
+                        eqGuides = eq.guides;
+                        if (typeof eq.snapX === 'number') { eqSnapX = eq.snapX; eqDX = Math.abs(eqSnapX - defaultX); }
+                        if (typeof eq.snapY === 'number') { eqSnapY = eq.snapY; eqDY = Math.abs(eqSnapY - defaultY); }
+                    }
+                }
+
+                // Apply the best candidates among edge vs equal-spacing per axis
+                if (state.shapeType === 'rectangle') {
+                    const detail = e.detail as any;
+                    const handler = detail?.handler;
+                    const pointer = detail?.p;
+                    const startPoints = handler?.startPoints;
+                    if (handler && pointer && startPoints?.box && startPoints?.point) {
+                        const { box, point } = startPoints;
+                        const defaultX = box.x + pointer.x - point.x;
+                        const defaultY = box.y + pointer.y - point.y;
+                        const finalX = (Number.isFinite(eqDX) || Number.isFinite(edgeDX)) ?
+                            ((eqDX <= edgeDX) ? (eqSnapX ?? edgeSnapX ?? defaultX) : (edgeSnapX ?? eqSnapX ?? defaultX)) : defaultX;
+                        const finalY = (Number.isFinite(eqDY) || Number.isFinite(edgeDY)) ?
+                            ((eqDY <= edgeDY) ? (eqSnapY ?? edgeSnapY ?? defaultY) : (edgeSnapY ?? eqSnapY ?? defaultY)) : defaultY;
+                        const changed = Math.abs(finalX - defaultX) > Number.EPSILON || Math.abs(finalY - defaultY) > Number.EPSILON;
+                        if (changed) {
                             e.preventDefault();
-                            const finalX = snappedX ? targetX : defaultX;
-                            const finalY = snappedY ? targetY : defaultY;
                             const moveTarget = handler.el as any;
                             if (typeof moveTarget.move === 'function') {
                                 moveTarget.move(finalX, finalY);
@@ -1404,6 +1638,11 @@ export class CanvasViewImpl implements CanvasView, Listener {
                 }
 
                 updateAlignmentGuides();
+                if (state.shapeType === 'rectangle' && eqGuides.length && !this.equalSpacingPressed) {
+                    renderSpacingGuidesDrag(eqGuides);
+                } else {
+                    clearSpacingGuidesDrag();
+                }
             }).on('dragend', (): void => {
                 if (aborted) {
                     this.resetViewPosition(state.clientID);
@@ -1414,6 +1653,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
                 this.draggableShape = null;
                 removeAlignmentGuides();
                 this.alignmentGuideId = null;
+                clearSpacingGuidesDrag();
                 const { cx, cy } = shape.bbox();
 
                 const dx2 = (startCenter.x - cx) ** 2;
@@ -1468,6 +1708,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
                 aborted = true;
                 removeAlignmentGuides();
                 this.alignmentGuideId = null;
+                clearSpacingGuidesDrag();
                 // disable internal drag events of SVG.js
                 // call chain is (mouseup -> SVG.handler.end -> SVG.handler.drag -> dragend)
                 window.dispatchEvent(new MouseEvent('mouseup'));
@@ -1699,8 +1940,13 @@ export class CanvasViewImpl implements CanvasView, Listener {
             }
         }
 
-        if (code.includes('control')) {
+        const assistMod = ((this.configuration as any).assistModifier || 'control') as string;
+        if (code.includes(assistMod)) {
             this.ctrlPressed = true;
+        }
+        const eqMod = ((this.configuration as any).equalSpacingModifier || 'alt') as string;
+        if (code.includes(eqMod)) {
+            this.equalSpacingPressed = true;
         }
     };
 
@@ -1724,8 +1970,13 @@ export class CanvasViewImpl implements CanvasView, Listener {
             }
         }
 
-        if (code.includes('control')) {
+        const assistMod = ((this.configuration as any).assistModifier || 'control') as string;
+        if (code.includes(assistMod)) {
             this.ctrlPressed = false;
+        }
+        const eqMod = ((this.configuration as any).equalSpacingModifier || 'alt') as string;
+        if (code.includes(eqMod)) {
+            this.equalSpacingPressed = false;
         }
     };
 
@@ -1754,6 +2005,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
         this.mode = Mode.IDLE;
         this.snapToAngleResize = consts.SNAP_TO_ANGLE_RESIZE_DEFAULT;
         this.ctrlPressed = false;
+        this.equalSpacingPressed = false;
         this.innerObjectsFlags = {
             drawHidden: {},
             editHidden: {},
@@ -1764,6 +2016,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
         this.draggableShape = null;
         this.resizableShape = null;
         this.alignmentGuideId = null;
+        this.spacingGuideGroupDrag = null;
 
         // Create HTML elements
         this.text = window.document.createElementNS('http://www.w3.org/2000/svg', 'svg');

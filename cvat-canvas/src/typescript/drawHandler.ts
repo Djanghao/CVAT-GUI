@@ -116,6 +116,11 @@ export class DrawHandlerImpl implements DrawHandler {
     private crosshairHighlightEnabled: boolean;
     private rectangleSnapEnabled: boolean;
     private drawingSnapActive: boolean;
+    private spacingGuideGroup: SVG.G | null;
+    private enableEqualSpacingAssist: boolean;
+    private assistModifier: 'control' | 'alt' | 'shift' | 'meta';
+    private equalSpacingModifier: 'control' | 'alt' | 'shift' | 'meta';
+    private equalSpacingTolerancePx: number;
 
     // we should use any instead of SVG.Shape because svg plugins cannot change declared interface
     // so, methods like draw() just undefined for SVG.Shape, but nevertheless they exist
@@ -386,6 +391,7 @@ export class DrawHandlerImpl implements DrawHandler {
         this.initialized = false;
         this.canvas.off('mousedown.draw');
         this.canvas.off('mousemove.draw');
+        this.clearSpacingGuides();
 
         // Draw plugin in some cases isn't activated
         // For example when draw from initialState
@@ -1262,10 +1268,12 @@ export class DrawHandlerImpl implements DrawHandler {
 
         this.canvas.on('mousedown.draw', (e: MouseEvent): void => {
             if (e.button === 0 && !e.altKey) {
+                // Clear spacing guides once drawing starts
+                this.clearSpacingGuides();
                 // If rectangle drawing snap is enabled and Ctrl is not pressed,
                 // start drawing from the snapped crosshair position instead of raw mouse coords.
                 const useSnappedStart = this.drawData?.shapeType === 'rectangle' &&
-                    this.rectangleSnapEnabled && !e.ctrlKey;
+                    this.rectangleSnapEnabled && !this.isModifierPressed(e, this.assistModifier);
 
                 // Initialize the session snapping flag based on the start intent
                 this.drawingSnapActive = useSnappedStart;
@@ -1413,16 +1421,23 @@ export class DrawHandlerImpl implements DrawHandler {
         this.drawingSnapActive = false;
         this.drawInstance = null;
         this.pointsGroup = null;
+        this.spacingGuideGroup = null;
+        this.enableEqualSpacingAssist = configuration.enableEqualSpacingAssist ?? true;
+        this.assistModifier = (configuration as any).assistModifier ?? 'control';
+        this.equalSpacingModifier = (configuration as any).equalSpacingModifier ?? 'alt';
+        this.equalSpacingTolerancePx = Math.max(0, (configuration as any).equalSpacingTolerancePx ?? configuration.snapTolerancePx ?? 2);
         this.cursorPosition = {
             x: 0,
             y: 0,
             };
 
         this.canvas.on('mousemove.crosshair', (e: MouseEvent): void => {
-            let [x, y] = translateToSVG((this.canvas.node as any) as SVGSVGElement, [e.clientX, e.clientY]);
+            const [rawX, rawY] = translateToSVG((this.canvas.node as any) as SVGSVGElement, [e.clientX, e.clientY]);
+            let x = rawX;
+            let y = rawY;
 
-            const shouldSnap = !e.ctrlKey && this.rectangleSnapEnabled &&
-                this.drawData?.shapeType === 'rectangle';
+            const isRectTool = this.drawData?.shapeType === 'rectangle';
+            const shouldSnap = !this.isModifierPressed(e, this.assistModifier) && this.rectangleSnapEnabled && isRectTool;
             if (shouldSnap) {
                 const scale = this.geometry.scale;
                 const threshold = Math.max(0, this.snapTolerancePx) / scale;
@@ -1459,6 +1474,27 @@ export class DrawHandlerImpl implements DrawHandler {
 
                 if (snapX !== null) x = snapX;
                 if (snapY !== null) y = snapY;
+
+                // Equal-spacing hinting/snapping only for start (before drawing begins). Modifier disables.
+                const drawingInProgress = isRectTool && this.drawInstance &&
+                    typeof this.drawInstance.remember === 'function' && !!this.drawInstance.remember('_paintHandler');
+                // Edge-snap handled above; equal-spacing is managed independently below
+            }
+
+            // Equal-spacing assist runs independently from general snap toggle
+            const scaleEq = this.geometry.scale;
+            const thresholdEq = Math.max(0, this.equalSpacingTolerancePx ?? this.snapTolerancePx) / scaleEq;
+            const drawingInProgressEq = isRectTool && this.drawInstance &&
+                typeof this.drawInstance.remember === 'function' && !!this.drawInstance.remember('_paintHandler');
+            const eqActive = this.enableEqualSpacingAssist && isRectTool && !drawingInProgressEq &&
+                !this.isModifierPressed(e, this.equalSpacingModifier);
+            if (eqActive) {
+                const eq = this.computeEqualSpacingSnap(rawX, rawY, thresholdEq);
+                if (eq.snappedX !== null) x = eq.snappedX as number;
+                if (eq.snappedY !== null) y = eq.snappedY as number;
+                this.renderSpacingGuides(eq.guides);
+            } else {
+                this.clearSpacingGuides();
             }
 
             this.cursorPosition = { x, y };
@@ -1513,9 +1549,233 @@ export class DrawHandlerImpl implements DrawHandler {
         });
     }
 
+    // Remove equal-spacing guide overlays
+    private clearSpacingGuides(): void {
+        if (this.spacingGuideGroup) {
+            this.spacingGuideGroup.remove();
+            this.spacingGuideGroup = null;
+        }
+    }
+
+    // Draw equal-spacing guide segments (dashed with halo)
+    private renderSpacingGuides(guides: Array<[number, number, number, number]>): void {
+        if (!this.crosshairHighlightEnabled) {
+            this.clearSpacingGuides();
+            return;
+        }
+        if (!guides.length) {
+            this.clearSpacingGuides();
+            return;
+        }
+        this.clearSpacingGuides();
+        this.spacingGuideGroup = this.canvas.group();
+
+        const scale = this.geometry.scale;
+        const dashedStrokeWidth = consts.BASE_STROKE_WIDTH / (1 * scale);
+        const haloWidth = Math.max(dashedStrokeWidth * 1.8, 3 / scale);
+        const dashLen = Math.max(8 / scale, 6 / scale);
+        const dashArray = `${dashLen} ${dashLen}`;
+
+        for (const [x1, y1, x2, y2] of guides) {
+            this.spacingGuideGroup
+                .line(x1, y1, x2, y2)
+                .attr({
+                    'stroke-width': haloWidth,
+                    'stroke-linecap': 'round',
+                    'stroke-dasharray': dashArray,
+                    'stroke-opacity': 0.6,
+                    'shape-rendering': 'geometricprecision',
+                    'pointer-events': 'none',
+                })
+                .style({ stroke: '#000' });
+
+            this.spacingGuideGroup
+                .line(x1, y1, x2, y2)
+                .attr({
+                    'stroke-width': dashedStrokeWidth,
+                    'stroke-linecap': 'round',
+                    'stroke-dasharray': dashArray,
+                    'shape-rendering': 'geometricprecision',
+                    'pointer-events': 'none',
+                })
+                .style({ stroke: '#4FC3F7' });
+        }
+    }
+
+    // Compute equal-spacing snap positions and reference lines for current crosshair (x, y)
+    private computeEqualSpacingSnap(
+        x: number,
+        y: number,
+        threshold: number,
+    ): { snappedX: number | null; snappedY: number | null; guides: Array<[number, number, number, number]> } {
+        const rectEls = Array.from(
+            (this.canvas.node as any as SVGSVGElement).getElementsByClassName('cvat_canvas_shape'),
+        ).filter((el: Element) => el.tagName && el.tagName.toLowerCase() === 'rect') as SVGRectElement[];
+
+        type R = { left: number; right: number; top: number; bottom: number };
+        const rects: R[] = [];
+        for (const el of rectEls) {
+            if ((el as any).classList.contains('cvat_canvas_hidden')) continue;
+            const bb = el.getBBox();
+            rects.push({ left: bb.x, right: bb.x + bb.width, top: bb.y, bottom: bb.y + bb.height });
+        }
+
+        const guides: Array<[number, number, number, number]> = [];
+        let bestDX = Number.POSITIVE_INFINITY;
+        let bestDY = Number.POSITIVE_INFINITY;
+        let snapX: number | null = null;
+        let snapY: number | null = null;
+
+        if (rects.length < 2) {
+            return { snappedX: snapX, snappedY: snapY, guides };
+        }
+
+        const mapBy = <K extends keyof R>(key: K): Map<number, R[]> => {
+            const m = new Map<number, R[]>();
+            for (const r of rects) {
+                const v = r[key];
+                const arr = m.get(v) ?? [];
+                arr.push(r);
+                m.set(v, arr);
+            }
+            return m;
+        };
+
+        const tops = mapBy('top');
+        const bottoms = mapBy('bottom');
+        const lefts = mapBy('left');
+        const rights = mapBy('right');
+
+        const pushGuideH = (yLine: number, x1: number, x2: number) => {
+            guides.push([x1, yLine, x2, yLine]);
+        };
+        const pushGuideV = (xLine: number, y1: number, y2: number) => {
+            guides.push([xLine, y1, xLine, y2]);
+        };
+
+        const processHorizontalGroup = (group: R[], yLine: number) => {
+            if (group.length < 2) return;
+            if (Math.abs(y - yLine) > threshold) return;
+            const arr = [...group].sort((a, b) => a.left - b.left);
+            const gaps: Array<{ d: number; from: R; to: R }> = [];
+            for (let i = 0; i < arr.length - 1; i++) {
+                const d = arr[i + 1].left - arr[i].right;
+                if (d > 0) gaps.push({ d, from: arr[i], to: arr[i + 1] });
+            }
+            if (!gaps.length) return;
+
+            // Prefer the existing gap nearest the cursor X as the reference
+            let refIdx = 0;
+            let refDist = Number.POSITIVE_INFINITY;
+            for (let i = 0; i < gaps.length; i++) {
+                const mid = (gaps[i].from.right + gaps[i].to.left) / 2;
+                const dist = Math.abs(x - mid);
+                if (dist < refDist) {
+                    refIdx = i;
+                    refDist = dist;
+                }
+            }
+            const refGap = gaps[refIdx];
+            const d = refGap.d;
+            const leftMost = arr[0];
+            const rightMost = arr[arr.length - 1];
+
+            // Draw all existing gaps that match the reference gap size (within threshold)
+            for (const g of gaps) {
+                if (Math.abs(g.d - d) <= threshold) {
+                    pushGuideH(yLine, g.from.right, g.to.left);
+                }
+            }
+
+            const candRight = rightMost.right + d;
+            const dxR = Math.abs(x - candRight);
+            if (dxR <= threshold && dxR < bestDX) {
+                bestDX = dxR;
+                snapX = candRight;
+                pushGuideH(yLine, rightMost.right, candRight);
+            }
+
+            const candLeft = leftMost.left - d;
+            const dxL = Math.abs(x - candLeft);
+            if (dxL <= threshold && dxL < bestDX) {
+                bestDX = dxL;
+                snapX = candLeft;
+                pushGuideH(yLine, candLeft, leftMost.left);
+            }
+        };
+
+        const processVerticalGroup = (group: R[], xLine: number) => {
+            if (group.length < 2) return;
+            if (Math.abs(x - xLine) > threshold) return;
+            const arr = [...group].sort((a, b) => a.top - b.top);
+            const gaps: Array<{ d: number; from: R; to: R }> = [];
+            for (let i = 0; i < arr.length - 1; i++) {
+                const d = arr[i + 1].top - arr[i].bottom;
+                if (d > 0) gaps.push({ d, from: arr[i], to: arr[i + 1] });
+            }
+            if (!gaps.length) return;
+
+            // Prefer the existing gap nearest the cursor Y as the reference
+            let refIdx = 0;
+            let refDist = Number.POSITIVE_INFINITY;
+            for (let i = 0; i < gaps.length; i++) {
+                const mid = (gaps[i].from.bottom + gaps[i].to.top) / 2;
+                const dist = Math.abs(y - mid);
+                if (dist < refDist) {
+                    refIdx = i;
+                    refDist = dist;
+                }
+            }
+            const refGap = gaps[refIdx];
+            const d = refGap.d;
+            const topMost = arr[0];
+            const bottomMost = arr[arr.length - 1];
+
+            // Draw all existing gaps that match the reference gap size (within threshold)
+            for (const g of gaps) {
+                if (Math.abs(g.d - d) <= threshold) {
+                    pushGuideV(xLine, g.from.bottom, g.to.top);
+                }
+            }
+
+            const candDown = bottomMost.bottom + d;
+            const dyD = Math.abs(y - candDown);
+            if (dyD <= threshold && dyD < bestDY) {
+                bestDY = dyD;
+                snapY = candDown;
+                pushGuideV(xLine, bottomMost.bottom, candDown);
+            }
+
+            const candUp = topMost.top - d;
+            const dyU = Math.abs(y - candUp);
+            if (dyU <= threshold && dyU < bestDY) {
+                bestDY = dyU;
+                snapY = candUp;
+                pushGuideV(xLine, candUp, topMost.top);
+            }
+        };
+
+        for (const [ty, group] of tops.entries()) processHorizontalGroup(group, ty);
+        for (const [by, group] of bottoms.entries()) processHorizontalGroup(group, by);
+        for (const [lx, group] of lefts.entries()) processVerticalGroup(group, lx);
+        for (const [rx, group] of rights.entries()) processVerticalGroup(group, rx);
+
+        return { snappedX: snapX, snappedY: snapY, guides };
+    }
+
     private strokePoint(point: SVG.Element): void {
         point.attr('stroke', this.isHidden ? 'none' : CIRCLE_STROKE);
         point.fill({ opacity: this.isHidden ? 0 : 1 });
+    }
+
+    private isModifierPressed(e: MouseEvent, mod: 'control' | 'alt' | 'shift' | 'meta'): boolean {
+        switch (mod) {
+            case 'control': return !!e.ctrlKey;
+            case 'alt': return !!e.altKey;
+            case 'shift': return !!e.shiftKey;
+            case 'meta': return !!e.metaKey;
+            default: return false;
+        }
     }
 
     private updateHidden(value: boolean) {
@@ -1541,6 +1801,18 @@ export class DrawHandlerImpl implements DrawHandler {
         }
         if (typeof configuration.enableRectangleDrawingSnap === 'boolean') {
             this.rectangleSnapEnabled = configuration.enableRectangleDrawingSnap;
+        }
+        if (typeof (configuration as any).enableEqualSpacingAssist === 'boolean') {
+            this.enableEqualSpacingAssist = (configuration as any).enableEqualSpacingAssist as boolean;
+        }
+        if ((configuration as any).assistModifier) {
+            this.assistModifier = ((configuration as any).assistModifier as string) as any;
+        }
+        if ((configuration as any).equalSpacingModifier) {
+            this.equalSpacingModifier = ((configuration as any).equalSpacingModifier as string) as any;
+        }
+        if (typeof (configuration as any).equalSpacingTolerancePx === 'number') {
+            this.equalSpacingTolerancePx = Math.max(0, (configuration as any).equalSpacingTolerancePx);
         }
         if (this.isHidden !== configuration.hideEditedObject) {
             this.updateHidden(configuration.hideEditedObject);

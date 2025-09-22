@@ -40,6 +40,17 @@ export class InteractionHandlerImpl implements InteractionHandler {
     private snapTolerancePx: number;
     private crosshairHighlightEnabled: boolean;
     private rectangleSnapEnabled: boolean;
+    private assistModifier: 'control' | 'alt' | 'shift' | 'meta';
+
+    private isModifierPressed(e: MouseEvent, mod: 'control' | 'alt' | 'shift' | 'meta'): boolean {
+        switch (mod) {
+            case 'control': return !!e.ctrlKey;
+            case 'alt': return !!e.altKey;
+            case 'shift': return !!e.shiftKey;
+            case 'meta': return !!e.metaKey;
+            default: return false;
+        }
+    }
 
     private prepareResult(): InteractionResult[] {
         return this.interactionShapes.map(
@@ -174,7 +185,7 @@ export class InteractionHandlerImpl implements InteractionHandler {
             if (e.button === 0 && !e.altKey) {
                 if (!initialized) {
                     // Start from snapped position if snapping is enabled
-                    const shouldSnapStart = this.rectangleSnapEnabled && !e.ctrlKey &&
+                    const shouldSnapStart = this.rectangleSnapEnabled && !this.isModifierPressed(e, this.assistModifier) &&
                         this.interactionData?.shapeType === 'rectangle';
                     const startEvent = (() => {
                         if (!shouldSnapStart) return e;
@@ -577,6 +588,9 @@ export class InteractionHandlerImpl implements InteractionHandler {
         }
         if (typeof configuration.enableRectangleDrawingSnap === 'boolean') {
             this.rectangleSnapEnabled = configuration.enableRectangleDrawingSnap;
+        }
+        if ((configuration as any).assistModifier) {
+            this.assistModifier = ((configuration as any).assistModifier as string) as any;
         }
 
         if (this.drawnIntermediateShape) {

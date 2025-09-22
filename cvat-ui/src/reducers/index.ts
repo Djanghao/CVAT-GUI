@@ -985,6 +985,15 @@ export interface WorkspaceSettingsState {
     showRectangleAlignmentGuides: boolean;
     enableRectangleDrawingSnap: boolean;
     enableRectangleMovingSnap: boolean;
+    // Equal-spacing hint/snap at rectangle start
+    enableEqualSpacingAssist: boolean;
+    // Equal-spacing hint/snap while moving rectangles
+    enableEqualSpacingAssistOnDrag: boolean;
+    // Modifier keys to temporarily disable assists
+    assistModifier: 'control' | 'alt' | 'shift' | 'meta';
+    equalSpacingModifier: 'control' | 'alt' | 'shift' | 'meta';
+    // Separate tolerance for equal-spacing (px in screen space)
+    equalSpacingTolerance: number;
 }
 
 export interface ShapesSettingsState {

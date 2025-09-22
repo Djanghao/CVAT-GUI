@@ -110,6 +110,11 @@ interface StateToProps {
     showRectangleAlignmentGuides: boolean;
     enableRectangleDrawingSnap: boolean;
     enableRectangleMovingSnap: boolean;
+    enableEqualSpacingAssist: boolean;
+    enableEqualSpacingAssistOnDrag: boolean;
+    assistModifier: 'control' | 'alt' | 'shift' | 'meta';
+    equalSpacingModifier: 'control' | 'alt' | 'shift' | 'meta';
+    equalSpacingTolerance: number;
     workspace: Workspace;
     minZLayer: number;
     maxZLayer: number;
@@ -257,6 +262,11 @@ function mapStateToProps(state: CombinedState): StateToProps {
         showRectangleAlignmentGuides,
         enableRectangleDrawingSnap,
         enableRectangleMovingSnap,
+        enableEqualSpacingAssist: state.settings.workspace.enableEqualSpacingAssist,
+        enableEqualSpacingAssistOnDrag: state.settings.workspace.enableEqualSpacingAssistOnDrag,
+        assistModifier: (state.settings.workspace as any).assistModifier,
+        equalSpacingModifier: (state.settings.workspace as any).equalSpacingModifier,
+        equalSpacingTolerance: (state.settings.workspace as any).equalSpacingTolerance,
         showAllInterpolationTracks,
         showTagsOnFrame,
         curZLayer,
@@ -407,6 +417,11 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
             showRectangleAlignmentGuides,
             enableRectangleDrawingSnap,
             enableRectangleMovingSnap,
+            enableEqualSpacingAssist,
+            enableEqualSpacingAssistOnDrag,
+            assistModifier,
+            equalSpacingModifier,
+            equalSpacingTolerance,
         } = this.props;
         const { canvasInstance } = this.props as { canvasInstance: Canvas };
 
@@ -431,6 +446,11 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
             showRectangleAlignmentGuides,
             enableRectangleDrawingSnap,
             enableRectangleMovingSnap,
+            enableEqualSpacingAssist,
+            enableEqualSpacingMovingAssist: enableEqualSpacingAssistOnDrag,
+            assistModifier,
+            equalSpacingModifier,
+            equalSpacingTolerancePx: equalSpacingTolerance,
             shapeOpacity: opacity,
             smoothImage,
             colorBy,
@@ -512,7 +532,12 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
             prevProps.highlightCrosshairOverlaps !== highlightCrosshairOverlaps ||
             prevProps.showRectangleAlignmentGuides !== showRectangleAlignmentGuides ||
             prevProps.enableRectangleDrawingSnap !== enableRectangleDrawingSnap ||
-            prevProps.enableRectangleMovingSnap !== enableRectangleMovingSnap
+            prevProps.enableRectangleMovingSnap !== enableRectangleMovingSnap ||
+            (prevProps as any).enableEqualSpacingAssist !== (this.props as any).enableEqualSpacingAssist ||
+            (prevProps as any).assistModifier !== (this.props as any).assistModifier ||
+            (prevProps as any).equalSpacingModifier !== (this.props as any).equalSpacingModifier ||
+            (prevProps as any).enableEqualSpacingAssistOnDrag !== (this.props as any).enableEqualSpacingAssistOnDrag ||
+            (prevProps as any).equalSpacingTolerance !== (this.props as any).equalSpacingTolerance
         ) {
             canvasInstance.configure({
                 undefinedAttrValue: config.UNDEFINED_ATTRIBUTE_VALUE,
@@ -533,6 +558,11 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
                 showRectangleAlignmentGuides,
                 enableRectangleDrawingSnap,
                 enableRectangleMovingSnap,
+                enableEqualSpacingAssist: (this.props as any).enableEqualSpacingAssist,
+                enableEqualSpacingMovingAssist: (this.props as any).enableEqualSpacingAssistOnDrag,
+                assistModifier: (this.props as any).assistModifier,
+                equalSpacingModifier: (this.props as any).equalSpacingModifier,
+                equalSpacingTolerancePx: (this.props as any).equalSpacingTolerance,
                 textPosition,
                 textContent,
                 showConflicts: showGroundTruth,

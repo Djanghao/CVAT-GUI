@@ -52,6 +52,11 @@ const defaultState: SettingsState = {
         showRectangleAlignmentGuides: true,
         enableRectangleDrawingSnap: true,
         enableRectangleMovingSnap: true,
+        enableEqualSpacingAssist: true,
+        enableEqualSpacingAssistOnDrag: true,
+        assistModifier: 'control',
+        equalSpacingModifier: 'alt',
+        equalSpacingTolerance: 2,
     },
     player: {
         canvasBackgroundColor: '#ffffff',
@@ -283,6 +288,51 @@ export default (state = defaultState, action: AnyAction): SettingsState => {
                 workspace: {
                     ...state.workspace,
                     enableRectangleMovingSnap: action.payload.enabled,
+                },
+            };
+        }
+        case SettingsActionTypes.SWITCH_EQUAL_SPACING_ASSIST: {
+            return {
+                ...state,
+                workspace: {
+                    ...state.workspace,
+                    enableEqualSpacingAssist: action.payload.enabled,
+                },
+            };
+        }
+        case SettingsActionTypes.SWITCH_EQUAL_SPACING_ASSIST_ON_DRAG: {
+            return {
+                ...state,
+                workspace: {
+                    ...state.workspace,
+                    enableEqualSpacingAssistOnDrag: action.payload.enabled,
+                },
+            };
+        }
+        case SettingsActionTypes.CHANGE_EQUAL_SPACING_TOLERANCE: {
+            return {
+                ...state,
+                workspace: {
+                    ...state.workspace,
+                    equalSpacingTolerance: action.payload.tolerance,
+                },
+            };
+        }
+        case SettingsActionTypes.CHANGE_ASSIST_MODIFIER: {
+            return {
+                ...state,
+                workspace: {
+                    ...state.workspace,
+                    assistModifier: action.payload.mod,
+                },
+            };
+        }
+        case SettingsActionTypes.CHANGE_EQUAL_SPACING_MODIFIER: {
+            return {
+                ...state,
+                workspace: {
+                    ...state.workspace,
+                    equalSpacingModifier: action.payload.mod,
                 },
             };
         }

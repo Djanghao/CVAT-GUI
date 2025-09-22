@@ -64,6 +64,11 @@ export enum SettingsActionTypes {
     SWITCH_RECTANGLE_ALIGNMENT_GUIDES = 'SWITCH_RECTANGLE_ALIGNMENT_GUIDES',
     SWITCH_RECTANGLE_DRAWING_SNAP = 'SWITCH_RECTANGLE_DRAWING_SNAP',
     SWITCH_RECTANGLE_MOVING_SNAP = 'SWITCH_RECTANGLE_MOVING_SNAP',
+    SWITCH_EQUAL_SPACING_ASSIST = 'SWITCH_EQUAL_SPACING_ASSIST',
+    SWITCH_EQUAL_SPACING_ASSIST_ON_DRAG = 'SWITCH_EQUAL_SPACING_ASSIST_ON_DRAG',
+    CHANGE_EQUAL_SPACING_TOLERANCE = 'CHANGE_EQUAL_SPACING_TOLERANCE',
+    CHANGE_ASSIST_MODIFIER = 'CHANGE_ASSIST_MODIFIER',
+    CHANGE_EQUAL_SPACING_MODIFIER = 'CHANGE_EQUAL_SPACING_MODIFIER',
 }
 
 export function changeShapesOpacity(opacity: number): AnyAction {
@@ -297,6 +302,51 @@ export function switchRectangleMovingSnap(enabled: boolean): AnyAction {
         type: SettingsActionTypes.SWITCH_RECTANGLE_MOVING_SNAP,
         payload: {
             enabled,
+        },
+    };
+}
+
+export function switchEqualSpacingAssist(enabled: boolean): AnyAction {
+    return {
+        type: SettingsActionTypes.SWITCH_EQUAL_SPACING_ASSIST,
+        payload: {
+            enabled,
+        },
+    };
+}
+
+export function switchEqualSpacingAssistOnDrag(enabled: boolean): AnyAction {
+    return {
+        type: SettingsActionTypes.SWITCH_EQUAL_SPACING_ASSIST_ON_DRAG,
+        payload: {
+            enabled,
+        },
+    };
+}
+
+export function changeAssistModifier(mod: 'control' | 'alt' | 'shift' | 'meta'): AnyAction {
+    return {
+        type: SettingsActionTypes.CHANGE_ASSIST_MODIFIER,
+        payload: {
+            mod,
+        },
+    };
+}
+
+export function changeEqualSpacingModifier(mod: 'control' | 'alt' | 'shift' | 'meta'): AnyAction {
+    return {
+        type: SettingsActionTypes.CHANGE_EQUAL_SPACING_MODIFIER,
+        payload: {
+            mod,
+        },
+    };
+}
+
+export function changeEqualSpacingTolerance(tolerance: number): AnyAction {
+    return {
+        type: SettingsActionTypes.CHANGE_EQUAL_SPACING_TOLERANCE,
+        payload: {
+            tolerance,
         },
     };
 }

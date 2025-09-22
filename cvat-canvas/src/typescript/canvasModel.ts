@@ -104,6 +104,12 @@ export interface Configuration {
     showRectangleAlignmentGuides?: boolean;
     enableRectangleDrawingSnap?: boolean;
     enableRectangleMovingSnap?: boolean;
+    enableEqualSpacingAssist?: boolean;
+    // Independent toggle for drag-time equal-spacing
+    enableEqualSpacingMovingAssist?: boolean;
+    assistModifier?: 'control' | 'alt' | 'shift' | 'meta';
+    equalSpacingModifier?: 'control' | 'alt' | 'shift' | 'meta';
+    equalSpacingTolerancePx?: number;
 }
 
 export interface BrushTool {
@@ -431,6 +437,11 @@ export class CanvasModelImpl extends MasterImpl implements CanvasModel {
                 showRectangleAlignmentGuides: true,
                 enableRectangleDrawingSnap: true,
                 enableRectangleMovingSnap: true,
+                enableEqualSpacingAssist: true,
+                enableEqualSpacingMovingAssist: true,
+                assistModifier: 'control',
+                equalSpacingModifier: 'alt',
+                equalSpacingTolerancePx: 2,
             },
             imageBitmap: false,
             image: null,
@@ -1045,6 +1056,23 @@ export class CanvasModelImpl extends MasterImpl implements CanvasModel {
 
         if (typeof configuration.enableRectangleMovingSnap === 'boolean') {
             this.data.configuration.enableRectangleMovingSnap = configuration.enableRectangleMovingSnap;
+        }
+
+        if (typeof (configuration as any).enableEqualSpacingAssist === 'boolean') {
+            (this.data.configuration as any).enableEqualSpacingAssist = (configuration as any).enableEqualSpacingAssist;
+        }
+        if ((configuration as any).assistModifier) {
+            (this.data.configuration as any).assistModifier = (configuration as any).assistModifier;
+        }
+        if ((configuration as any).equalSpacingModifier) {
+            (this.data.configuration as any).equalSpacingModifier = (configuration as any).equalSpacingModifier;
+        }
+        if (typeof (configuration as any).enableEqualSpacingMovingAssist === 'boolean') {
+            (this.data.configuration as any).enableEqualSpacingMovingAssist =
+                (configuration as any).enableEqualSpacingMovingAssist;
+        }
+        if (typeof (configuration as any).equalSpacingTolerancePx === 'number' && (configuration as any).equalSpacingTolerancePx >= 0) {
+            (this.data.configuration as any).equalSpacingTolerancePx = (configuration as any).equalSpacingTolerancePx;
         }
 
         this.notify(UpdateReasons.CONFIG_UPDATED);
